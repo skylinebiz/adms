@@ -84,41 +84,43 @@ export default function Companies() {
           <p className="muted">Loading…</p>
         ) : (
           <>
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Devices</th>
-                  <th>Admin users</th>
-                  <th>Created</th>
-                  {user?.role === "SUPER_ADMIN" && <th></th>}
-                </tr>
-              </thead>
-              <tbody>
-                {companies.map((c) => (
-                  <tr key={c.id}>
-                    <td>{c.name}</td>
-                    <td>{c._count?.devices ?? "-"}</td>
-                    <td>{c._count?.adminUsers ?? "-"}</td>
-                    <td>{new Date(c.createdAt).toLocaleString()}</td>
-                    {user?.role === "SUPER_ADMIN" && (
-                      <td>
-                        <button className="btn btn-sm btn-danger" onClick={() => onDelete(c.id)}>
-                          Delete
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-                {companies.length === 0 && (
+            <div className="table-wrap">
+              <table>
+                <thead>
                   <tr>
-                    <td colSpan={5} className="muted">
-                      No companies yet.
-                    </td>
+                    <th>Name</th>
+                    <th>Devices</th>
+                    <th>Admin users</th>
+                    <th>Created</th>
+                    {user?.role === "SUPER_ADMIN" && <th></th>}
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {companies.map((c) => (
+                    <tr key={c.id}>
+                      <td>{c.name}</td>
+                      <td>{c._count?.devices ?? "-"}</td>
+                      <td>{c._count?.adminUsers ?? "-"}</td>
+                      <td>{new Date(c.createdAt).toLocaleString()}</td>
+                      {user?.role === "SUPER_ADMIN" && (
+                        <td>
+                          <button className="btn btn-sm btn-danger" onClick={() => onDelete(c.id)}>
+                            Delete
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                  {companies.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="muted">
+                        No companies yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
             {user?.role === "SUPER_ADMIN" && (
               <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
             )}

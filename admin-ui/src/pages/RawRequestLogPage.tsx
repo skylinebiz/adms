@@ -105,6 +105,7 @@ export default function RawRequestLogPage() {
           <p className="muted">Loading…</p>
         ) : (
           <>
+            <div className="table-wrap">
             <table>
               <thead>
                 <tr>
@@ -161,6 +162,7 @@ export default function RawRequestLogPage() {
                 )}
               </tbody>
             </table>
+            </div>
             <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
           </>
         )}

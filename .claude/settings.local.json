@@ -39,7 +39,11 @@
       "Bash(curl -s -i -c /tmp/cookies.txt -X POST http://localhost:8080/api/admin/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"admin@example.com\",\"password\":\"change-me-immediately\"}')",
       "Bash(curl -s -i -c /tmp/cookies.txt -X POST http://localhost:8080/api/admin/auth/login -H 'Content-Type: application/json' --data-raw '{\"email\":\"admin@example.com\",\"password\":\"SuperSecret123!\"}')",
       "Bash(curl -s -b cookies.txt -X PATCH http://localhost:8080/api/admin/auth/me/password -H 'Content-Type: application/json' -d '{\"currentPassword\":\"change-me-immediately\",\"newPassword\":\"SuperSecret123!\"}')",
-      "Bash(curl -s -b cookies.txt \"http://localhost:8080/api/admin/raw-requests\" -o /dev/null -w \"super-admin status: %{http_code}\\\\n\")"
+      "Bash(curl -s -b cookies.txt \"http://localhost:8080/api/admin/raw-requests\" -o /dev/null -w \"super-admin status: %{http_code}\\\\n\")",
+      "Bash(powershell -Command \"Stop-Process -Id 14848 -Force -ErrorAction SilentlyContinue\")",
+      "Bash(docker stop *)",
+      "Bash(docker rm *)",
+      "Bash(curl -s \"http://localhost:8080/admin\")"
     ]
   }
 }

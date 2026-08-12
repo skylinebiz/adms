@@ -148,6 +148,7 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
           <p className="muted">Loading…</p>
         ) : (
           <>
+            <div className="table-wrap">
             <table>
               <thead>
                 <tr>
@@ -217,6 +218,7 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
                 )}
               </tbody>
             </table>
+            </div>
             <Pagination page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
           </>
         )}

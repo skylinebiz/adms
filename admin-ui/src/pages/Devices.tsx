@@ -64,6 +64,7 @@ export default function Devices() {
           <p className="muted">Loading…</p>
         ) : (
           <>
+            <div className="table-wrap">
             <table>
               <thead>
                 <tr>
@@ -129,6 +130,7 @@ export default function Devices() {
                 )}
               </tbody>
             </table>
+            </div>
             <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
           </>
         )}
