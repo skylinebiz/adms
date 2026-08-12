@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { api, ApiError, DeviceOption, PunchRecord } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useSelection } from "../hooks/useSelection";
+import { formatPunchTime } from "../utils/formatTime";
 import DeliveryLogDrawer from "./DeliveryLogDrawer";
 import Pagination from "./Pagination";
 
@@ -163,7 +164,9 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
                   )}
                   <th>PIN</th>
                   <th>Device</th>
-                  <th>Punch time</th>
+                  <th title="Shown exactly as the device's own clock reported it, not converted to your timezone">
+                    Punch time
+                  </th>
                   <th>Verify mode</th>
                   <th>Webhook status</th>
                   <th>Attempts</th>
@@ -181,7 +184,7 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
                     )}
                     <td>{r.devicePin}</td>
                     <td>{r.device?.label ?? r.device?.serialNumber}</td>
-                    <td>{new Date(r.punchTime).toLocaleString()}</td>
+                    <td>{formatPunchTime(r.punchTime)}</td>
                     <td>{r.verifyMode}</td>
                     <td>
                       <span className={`badge badge-${r.webhookStatus}`}>{r.webhookStatus}</span>

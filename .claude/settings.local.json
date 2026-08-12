@@ -43,7 +43,15 @@
       "Bash(powershell -Command \"Stop-Process -Id 14848 -Force -ErrorAction SilentlyContinue\")",
       "Bash(docker stop *)",
       "Bash(docker rm *)",
-      "Bash(curl -s \"http://localhost:8080/admin\")"
+      "Bash(curl -s \"http://localhost:8080/admin\")",
+      "Bash(TZ=\"America/New_York\" node /tmp/verify_tz.mjs)",
+      "Bash(TZ=\"UTC\" node /tmp/verify_tz.mjs)",
+      "Bash(TZ=\"America/New_York\" node -e \"console.log\\(Intl.DateTimeFormat\\(\\).resolvedOptions\\(\\).timeZone, new Date\\(\\).getTimezoneOffset\\(\\)\\)\")",
+      "Bash(TZ=\"Asia/Kolkata\" node -e \"console.log\\(Intl.DateTimeFormat\\(\\).resolvedOptions\\(\\).timeZone, new Date\\(\\).getTimezoneOffset\\(\\)\\)\")",
+      "Bash(node -e \"console.log\\(process.version, Intl.DateTimeFormat\\(\\).resolvedOptions\\(\\).timeZone\\)\")",
+      "Bash(powershell -Command \"Start-Process 'C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe'\")",
+      "Bash(sleep 2; cat /tmp/server-out.log)",
+      "Bash(powershell -Command \"Stop-Process -Id 37152 -Force -ErrorAction SilentlyContinue\")"
     ]
   }
 }

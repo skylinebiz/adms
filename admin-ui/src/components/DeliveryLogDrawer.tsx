@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, PunchRecord, WebhookDelivery } from "../api";
+import { formatPunchTime } from "../utils/formatTime";
 import Pagination from "./Pagination";
 
 const PAGE_SIZE = 10;
@@ -32,7 +33,7 @@ export default function DeliveryLogDrawer({ punchRecordId, onClose }: { punchRec
             {punchRecord && (
               <div className="card">
                 <div>
-                  PIN <strong>{punchRecord.devicePin}</strong> · {new Date(punchRecord.punchTime).toLocaleString()}
+                  PIN <strong>{punchRecord.devicePin}</strong> · {formatPunchTime(punchRecord.punchTime)}
                 </div>
                 <div className="muted">
                   Device: {punchRecord.device?.label ?? punchRecord.device?.serialNumber}

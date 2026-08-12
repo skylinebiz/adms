@@ -229,6 +229,16 @@ POSTed as JSON to that URL:
 
 signed with `X-Webhook-Signature: sha256=<hmac_sha256_hex(secret, raw_json_body)>`.
 
+**`punch_time` is not a real UTC instant** — it's the device's literal
+wall-clock digits (`YYYY-MM-DD HH:mm:ss` from the ATTLOG line) stamped with
+a `Z` suffix, because the device sends no timezone information at all.
+`received_at` (server-generated) is real UTC. If you need `punch_time` in a
+particular timezone, treat the digits as-is (parse with a fixed UTC offset,
+don't let your JSON/date library "helpfully" convert it) — the admin
+panel's Punch Records / Failed Webhooks / delivery-log views do exactly
+this (render in forced UTC) so the displayed time always matches what the
+device's own clock showed, regardless of the admin's browser timezone.
+
 Only a 2xx response marks it delivered. Failures back off (30s, 2m, 10m, 1h,
 6h) up to `WEBHOOK_MAX_ATTEMPTS` (default 5), after which the record stays
 visible under **Failed Webhooks** in the admin panel for manual or bulk
