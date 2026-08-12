@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, ApiError, DeviceOption, DeviceRawLog } from "../api";
+import { useAuth } from "../context/AuthContext";
+import { useSelection } from "../hooks/useSelection";
 import Pagination from "../components/Pagination";
 import RawEntryDrawer from "../components/RawEntryDrawer";
 
 const PAGE_SIZE = 25;
 
 export default function RawDataDump() {
+  const { user } = useAuth();
+  const canDelete = user?.role === "SUPER_ADMIN";
+
   const [params, setParams] = useSearchParams();
   const [devices, setDevices] = useState<DeviceOption[]>([]);
   const [logs, setLogs] = useState<DeviceRawLog[]>([]);
@@ -15,6 +20,7 @@ export default function RawDataDump() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewing, setViewing] = useState<DeviceRawLog | null>(null);
+  const { selected, toggle, toggleAll, clear } = useSelection();
 
   const deviceId = params.get("deviceId") ?? "";
   const table = params.get("table") ?? "";
@@ -44,6 +50,7 @@ export default function RawDataDump() {
 
   useEffect(() => {
     load();
+    clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deviceId, table, page]);
 
@@ -53,6 +60,21 @@ export default function RawDataDump() {
     else next.delete(key);
     setParams(next);
     setPage(1);
+  }
+
+  async function deleteOne(id: string) {
+    if (!deviceId) return;
+    if (!confirm("Delete this raw data entry? This cannot be undone.")) return;
+    await api.deleteDeviceRawLog(deviceId, id);
+    await load();
+  }
+
+  async function deleteSelected() {
+    if (!deviceId || selected.size === 0) return;
+    if (!confirm(`Delete ${selected.size} raw data entr${selected.size === 1 ? "y" : "ies"}? This cannot be undone.`)) return;
+    await api.deleteDeviceRawLogsBulk(deviceId, Array.from(selected));
+    clear();
+    await load();
   }
 
   return (
@@ -84,6 +106,11 @@ export default function RawDataDump() {
             onChange={(e) => setFilter("table", e.target.value)}
           />
         </div>
+        {canDelete && deviceId && (
+          <button className="btn btn-danger" disabled={selected.size === 0} onClick={deleteSelected}>
+            Delete selected ({selected.size})
+          </button>
+        )}
       </div>
 
       <div className="card">
@@ -96,6 +123,15 @@ export default function RawDataDump() {
             <table>
               <thead>
                 <tr>
+                  {canDelete && (
+                    <th>
+                      <input
+                        type="checkbox"
+                        checked={logs.length > 0 && logs.every((l) => selected.has(l.id))}
+                        onChange={() => toggleAll(logs.map((l) => l.id))}
+                      />
+                    </th>
+                  )}
                   <th>Received</th>
                   <th>Table</th>
                   <th>Endpoint</th>
@@ -107,6 +143,11 @@ export default function RawDataDump() {
               <tbody>
                 {logs.map((l) => (
                   <tr key={l.id}>
+                    {canDelete && (
+                      <td>
+                        <input type="checkbox" checked={selected.has(l.id)} onChange={() => toggle(l.id)} />
+                      </td>
+                    )}
                     <td>{new Date(l.createdAt).toLocaleString()}</td>
                     <td>{l.table ? <span className="badge badge-pending">{l.table}</span> : <span className="muted">—</span>}</td>
                     <td>
@@ -114,16 +155,21 @@ export default function RawDataDump() {
                     </td>
                     <td>{l.method}</td>
                     <td>{l.rawBody?.length ?? 0} chars</td>
-                    <td>
+                    <td style={{ display: "flex", gap: 6 }}>
                       <button className="btn btn-sm" onClick={() => setViewing(l)}>
                         View
                       </button>
+                      {canDelete && (
+                        <button className="btn btn-sm btn-danger" onClick={() => deleteOne(l.id)}>
+                          Delete
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
                 {logs.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="muted">
+                    <td colSpan={canDelete ? 7 : 6} className="muted">
                       No raw (non-ATTLOG) data recorded for this device yet.
                     </td>
                   </tr>

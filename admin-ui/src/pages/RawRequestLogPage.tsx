@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, ApiError, RawRequestLog } from "../api";
+import { useSelection } from "../hooks/useSelection";
 import Pagination from "../components/Pagination";
 import RawEntryDrawer from "../components/RawEntryDrawer";
 
@@ -14,6 +15,7 @@ export default function RawRequestLogPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewing, setViewing] = useState<RawRequestLog | null>(null);
+  const { selected, toggle, toggleAll, clear } = useSelection();
 
   const serialNumber = params.get("serialNumber") ?? "";
   const endpoint = params.get("endpoint") ?? "";
@@ -39,6 +41,7 @@ export default function RawRequestLogPage() {
 
   useEffect(() => {
     load();
+    clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serialNumber, endpoint, page]);
 
@@ -48,6 +51,20 @@ export default function RawRequestLogPage() {
     else next.delete(key);
     setParams(next);
     setPage(1);
+  }
+
+  async function deleteOne(id: string) {
+    if (!confirm("Delete this raw request entry? This cannot be undone.")) return;
+    await api.deleteRawRequest(id);
+    await load();
+  }
+
+  async function deleteSelected() {
+    if (selected.size === 0) return;
+    if (!confirm(`Delete ${selected.size} raw request entr${selected.size === 1 ? "y" : "ies"}? This cannot be undone.`)) return;
+    await api.deleteRawRequestsBulk(Array.from(selected));
+    clear();
+    await load();
   }
 
   return (
@@ -78,6 +95,9 @@ export default function RawRequestLogPage() {
             <option value="/iclock/test">/iclock/test</option>
           </select>
         </div>
+        <button className="btn btn-danger" disabled={selected.size === 0} onClick={deleteSelected}>
+          Delete selected ({selected.size})
+        </button>
       </div>
 
       <div className="card">
@@ -88,6 +108,13 @@ export default function RawRequestLogPage() {
             <table>
               <thead>
                 <tr>
+                  <th>
+                    <input
+                      type="checkbox"
+                      checked={requests.length > 0 && requests.every((r) => selected.has(r.id))}
+                      onChange={() => toggleAll(requests.map((r) => r.id))}
+                    />
+                  </th>
                   <th>Received</th>
                   <th>SN</th>
                   <th>Method</th>
@@ -99,6 +126,9 @@ export default function RawRequestLogPage() {
               <tbody>
                 {requests.map((r) => (
                   <tr key={r.id}>
+                    <td>
+                      <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} />
+                    </td>
                     <td>{new Date(r.createdAt).toLocaleString()}</td>
                     <td>
                       {r.serialNumber ? (
@@ -112,16 +142,19 @@ export default function RawRequestLogPage() {
                       <code className="mono">{r.endpoint}</code>
                     </td>
                     <td>{r.rawBody?.length ?? 0} chars</td>
-                    <td>
+                    <td style={{ display: "flex", gap: 6 }}>
                       <button className="btn btn-sm" onClick={() => setViewing(r)}>
                         View
+                      </button>
+                      <button className="btn btn-sm btn-danger" onClick={() => deleteOne(r.id)}>
+                        Delete
                       </button>
                     </td>
                   </tr>
                 ))}
                 {requests.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="muted">
+                    <td colSpan={7} className="muted">
                       No raw requests recorded yet.
                     </td>
                   </tr>

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/client";
 import { config } from "../config";
-import { resolveCompanyScope } from "../middleware/requireAdminAuth";
+import { requireSuperAdmin, resolveCompanyScope } from "../middleware/requireAdminAuth";
 import { dispatchWebhook, renderPunchWebhookBody } from "../webhooks/dispatcher";
 import { renderHeaders, SAMPLE_TEMPLATE_VARS } from "../webhooks/template";
 import { OPTIONS_LIMIT, paginationQuerySchema } from "../utils/pagination";
@@ -377,6 +377,34 @@ devicesRouter.get("/:id/raw-logs", async (req, res) => {
   ]);
 
   res.json({ logs, total, page, pageSize });
+});
+
+// Deletion is restricted to super_admin, same reasoning as punch records -
+// destructive to debug/audit history, so no company_admin self-service.
+devicesRouter.delete("/:id/raw-logs/:logId", requireSuperAdmin, async (req, res) => {
+  const log = await prisma.deviceRawLog.findUnique({ where: { id: req.params.logId } });
+  if (!log || log.deviceId !== req.params.id) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  await prisma.deviceRawLog.delete({ where: { id: log.id } });
+  res.json({ ok: true });
+});
+
+const rawLogBulkDeleteSchema = z.object({ ids: z.array(z.string()).min(1).max(500) });
+
+devicesRouter.post("/:id/raw-logs/delete-bulk", requireSuperAdmin, async (req, res) => {
+  const parsed = rawLogBulkDeleteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
+    return;
+  }
+  // Scoped to deviceId as well as id, so ids from another device can never
+  // slip through even if included in the request.
+  const result = await prisma.deviceRawLog.deleteMany({
+    where: { id: { in: parsed.data.ids }, deviceId: req.params.id },
+  });
+  res.json({ ok: true, deleted: result.count });
 });
 
 devicesRouter.delete("/:id", async (req, res) => {

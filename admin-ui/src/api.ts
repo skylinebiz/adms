@@ -264,4 +264,16 @@ export const api = {
     ),
   retryPunchRecord: (id: string) => post<{ ok: true }>(`/punch-records/${id}/retry`),
   retryBulk: (ids: string[]) => post<{ ok: true; retried: number }>("/punch-records/retry-bulk", { ids }),
+  deletePunchRecord: (id: string) => del<{ ok: true }>(`/punch-records/${id}`),
+  deletePunchRecordsBulk: (ids: string[]) =>
+    post<{ ok: true; deleted: number }>("/punch-records/delete-bulk", { ids }),
+
+  deleteDeviceRawLog: (deviceId: string, logId: string) =>
+    del<{ ok: true }>(`/devices/${deviceId}/raw-logs/${logId}`),
+  deleteDeviceRawLogsBulk: (deviceId: string, ids: string[]) =>
+    post<{ ok: true; deleted: number }>(`/devices/${deviceId}/raw-logs/delete-bulk`, { ids }),
+
+  deleteRawRequest: (id: string) => del<{ ok: true }>(`/raw-requests/${id}`),
+  deleteRawRequestsBulk: (ids: string[]) =>
+    post<{ ok: true; deleted: number }>("/raw-requests/delete-bulk", { ids }),
 };

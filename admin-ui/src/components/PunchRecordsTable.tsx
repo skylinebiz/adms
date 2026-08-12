@@ -1,10 +1,18 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, ApiError, DeviceOption, PunchRecord } from "../api";
+import { useAuth } from "../context/AuthContext";
+import { useSelection } from "../hooks/useSelection";
 import DeliveryLogDrawer from "./DeliveryLogDrawer";
 import Pagination from "./Pagination";
 
 export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === "SUPER_ADMIN";
+  const canRetryBulk = mode === "failed";
+  const canDelete = isSuperAdmin;
+  const showCheckboxColumn = canRetryBulk || canDelete;
+
   const [params, setParams] = useSearchParams();
   const [records, setRecords] = useState<PunchRecord[]>([]);
   const [devices, setDevices] = useState<DeviceOption[]>([]);
@@ -13,7 +21,7 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
   const pageSize = 25;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const { selected, toggle, toggleAll, clear } = useSelection();
   const [viewingDeliveries, setViewingDeliveries] = useState<string | null>(null);
 
   const deviceId = params.get("deviceId") ?? "";
@@ -50,7 +58,7 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
 
   useEffect(() => {
     load();
-    setSelected(new Set());
+    clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, deviceId, status, from, to, page]);
 
@@ -70,17 +78,22 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
   async function retrySelected() {
     if (selected.size === 0) return;
     await api.retryBulk(Array.from(selected));
-    setSelected(new Set());
+    clear();
     await load();
   }
 
-  function toggleSelected(id: string) {
-    setSelected((s) => {
-      const next = new Set(s);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  async function deleteOne(id: string) {
+    if (!confirm("Delete this punch record? This cannot be undone.")) return;
+    await api.deletePunchRecord(id);
+    await load();
+  }
+
+  async function deleteSelected() {
+    if (selected.size === 0) return;
+    if (!confirm(`Delete ${selected.size} punch record(s)? This cannot be undone.`)) return;
+    await api.deletePunchRecordsBulk(Array.from(selected));
+    clear();
+    await load();
   }
 
   return (
@@ -116,9 +129,14 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
           <label>To</label>
           <input type="date" value={to} onChange={(e) => setFilter("to", e.target.value)} />
         </div>
-        {mode === "failed" && (
+        {canRetryBulk && (
           <button className="btn btn-primary" disabled={selected.size === 0} onClick={retrySelected}>
             Retry selected ({selected.size})
+          </button>
+        )}
+        {canDelete && (
+          <button className="btn btn-danger" disabled={selected.size === 0} onClick={deleteSelected}>
+            Delete selected ({selected.size})
           </button>
         )}
       </div>
@@ -133,7 +151,15 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
             <table>
               <thead>
                 <tr>
-                  {mode === "failed" && <th></th>}
+                  {showCheckboxColumn && (
+                    <th>
+                      <input
+                        type="checkbox"
+                        checked={records.length > 0 && records.every((r) => selected.has(r.id))}
+                        onChange={() => toggleAll(records.map((r) => r.id))}
+                      />
+                    </th>
+                  )}
                   <th>PIN</th>
                   <th>Device</th>
                   <th>Punch time</th>
@@ -147,13 +173,9 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
               <tbody>
                 {records.map((r) => (
                   <tr key={r.id}>
-                    {mode === "failed" && (
+                    {showCheckboxColumn && (
                       <td>
-                        <input
-                          type="checkbox"
-                          checked={selected.has(r.id)}
-                          onChange={() => toggleSelected(r.id)}
-                        />
+                        <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} />
                       </td>
                     )}
                     <td>{r.devicePin}</td>
@@ -176,6 +198,11 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
                       {r.webhookStatus !== "delivered" && (
                         <button className="btn btn-sm" onClick={() => retryOne(r.id)}>
                           Retry now
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button className="btn btn-sm btn-danger" onClick={() => deleteOne(r.id)}>
+                          Delete
                         </button>
                       )}
                     </td>

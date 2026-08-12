@@ -173,6 +173,15 @@ Raw Request Log especially, since it logs every heartbeat — so periodic
 pruning is worth setting up for a long-running production deployment; none
 is built in.
 
+### Deleting records
+
+Punch Records, Failed Webhooks, Raw Data Dump, and Raw Request Log all
+support single-row and bulk delete (a header checkbox selects every row
+currently on the page; a "Delete selected (N)" button acts on the
+selection) — **super admin only**, even for a company_admin's own data, since
+these are audit/attendance history and deletion is irreversible. Deleting a
+punch record cascades to its webhook delivery attempt history.
+
 ## Webhook delivery
 
 Each device has its own `webhookUrl` + `webhookSecret` + `webhookEnabled`

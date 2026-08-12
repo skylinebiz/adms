@@ -39,3 +39,27 @@ rawRequestsRouter.get("/", async (req, res) => {
 
   res.json({ requests, total, page, pageSize });
 });
+
+const bulkDeleteSchema = z.object({ ids: z.array(z.string()).min(1).max(500) });
+
+// Registered before "/:id" so "delete-bulk" isn't swallowed as an :id -
+// moot for DELETE (different method/router below) but kept consistent with
+// the pattern used elsewhere in this codebase.
+rawRequestsRouter.post("/delete-bulk", async (req, res) => {
+  const parsed = bulkDeleteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
+    return;
+  }
+  const result = await prisma.rawRequestLog.deleteMany({ where: { id: { in: parsed.data.ids } } });
+  res.json({ ok: true, deleted: result.count });
+});
+
+rawRequestsRouter.delete("/:id", async (req, res) => {
+  const deleted = await prisma.rawRequestLog.delete({ where: { id: req.params.id } }).catch(() => null);
+  if (!deleted) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  res.json({ ok: true });
+});

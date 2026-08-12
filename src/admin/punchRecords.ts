@@ -3,7 +3,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/client";
 import { config } from "../config";
-import { resolveCompanyScope } from "../middleware/requireAdminAuth";
+import { requireSuperAdmin, resolveCompanyScope } from "../middleware/requireAdminAuth";
 import { paginationQuerySchema } from "../utils/pagination";
 
 export const punchRecordsRouter = Router();
@@ -200,4 +200,28 @@ punchRecordsRouter.post("/retry-bulk", async (req, res) => {
 
   await resetForRetry(visibleIds);
   res.json({ ok: true, retried: visibleIds.length });
+});
+
+// Deletion is destructive to attendance history, so it's restricted to
+// super_admin regardless of company scope (unlike retry, which company_admin
+// can also do on their own records). Cascades to WebhookDelivery rows.
+punchRecordsRouter.delete("/:id", requireSuperAdmin, async (req, res) => {
+  const deleted = await prisma.punchRecord.delete({ where: { id: req.params.id } }).catch(() => null);
+  if (!deleted) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  res.json({ ok: true });
+});
+
+const bulkDeleteSchema = z.object({ ids: z.array(z.string()).min(1).max(500) });
+
+punchRecordsRouter.post("/delete-bulk", requireSuperAdmin, async (req, res) => {
+  const parsed = bulkDeleteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
+    return;
+  }
+  const result = await prisma.punchRecord.deleteMany({ where: { id: { in: parsed.data.ids } } });
+  res.json({ ok: true, deleted: result.count });
 });
