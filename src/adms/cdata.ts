@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/client";
 import { deviceLogger } from "../logger";
-import { findDeviceBySerial, logUnregisteredPing, touchDevice } from "./deviceLookup";
+import { resolveDevice, sendRejected, touchDevice } from "./deviceLookup";
 import { parseAttlogBody } from "./parsers/attlog";
 import { logDeviceRawData } from "./rawLog";
 
@@ -33,12 +33,16 @@ export async function handleCdataGet(req: Request, res: Response) {
   const sn = String(req.query.SN ?? "");
   deviceLogger.info({ sn, query: req.query }, "cdata GET (handshake)");
 
-  const device = await findDeviceBySerial(sn);
+  const { device, trusted } = await resolveDevice(req);
+  if (device && !trusted) {
+    sendRejected(res);
+    return;
+  }
   if (device) {
     await touchDevice(device.id);
-  } else {
-    await logUnregisteredPing(req, sn);
   }
+  // device === null: still-unregistered/pending, already captured inside
+  // resolveDevice - falls through to the normal OK handshake response.
 
   sendPlainText(res, buildOptionsResponse());
 }
@@ -98,11 +102,16 @@ export async function handleCdataPost(req: Request, res: Response) {
 
   deviceLogger.info({ sn, table, bodyLength: body.length }, "cdata POST");
 
-  const device = await findDeviceBySerial(sn);
+  const { device, trusted } = await resolveDevice(req, body);
   if (!device) {
-    await logUnregisteredPing(req, sn, body);
-    // Still ack so the device doesn't hammer retries for an SN we can't map yet.
+    // Still-unregistered/pending SN, already captured inside resolveDevice.
+    // Ack so the device doesn't hammer retries for an SN we can't map yet.
     sendPlainText(res, OK);
+    return;
+  }
+
+  if (!trusted) {
+    sendRejected(res);
     return;
   }
 

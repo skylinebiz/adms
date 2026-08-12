@@ -59,21 +59,32 @@ function toDeviceListItem(device: {
   status: string;
   lastSeenAt: Date | null;
   webhookUrl: string | null;
+  webhookSecret: string | null;
   webhookEnabled: boolean;
+  deviceSecret: string | null;
   createdAt: Date;
 }) {
-  return { ...device, webhookUrlMasked: maskWebhookUrl(device.webhookUrl), webhookUrl: undefined };
+  return {
+    ...device,
+    webhookUrlMasked: maskWebhookUrl(device.webhookUrl),
+    webhookUrl: undefined,
+    // Neither secret belongs in a list payload - only presence, not value.
+    // (webhookSecret used to leak here in full; deviceSecret never should.)
+    webhookSecret: undefined,
+    deviceSecretSet: device.deviceSecret !== null,
+    deviceSecret: undefined,
+  };
 }
 
 // NOTE: unregistered-pings/options must be registered before the /:id param
 // route so those path segments aren't swallowed as an :id.
 //
-// Unregistered SNs are grouped (distinct SN, not one row per ping), and
-// filtered against the registered-device set before pagination is applied,
-// so page counts stay correct. The distinct-SN set is fetched in full and
-// paginated in memory - bounded by the number of *distinct* unknown serial
-// numbers ever seen (not total ping volume), which is a modest dataset even
-// under sustained junk traffic.
+// Backed directly by PendingDevice (one row per not-yet-claimed SN, kept
+// up to date by resolveDevice in src/adms/deviceLookup.ts) rather than
+// deriving a summary from the raw UnregisteredDevicePing log on every
+// request - real DB-level pagination instead of fetch-all-and-slice.
+// Includes each SN's captured secret (if any), which claiming below
+// carries straight into the new Device record.
 devicesRouter.get("/unregistered-pings", async (req, res) => {
   if (req.adminUser!.role !== "SUPER_ADMIN") {
     // Unregistered pings have no company yet - only super_admin can triage them.
@@ -88,42 +99,42 @@ devicesRouter.get("/unregistered-pings", async (req, res) => {
   }
   const { page, pageSize } = parsedQuery.data;
 
-  const registered = new Set(
-    (await prisma.device.findMany({ select: { serialNumber: true } })).map((d) => d.serialNumber)
-  );
+  const [pending, total] = await Promise.all([
+    prisma.pendingDevice.findMany({
+      orderBy: { lastSeenAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.pendingDevice.count(),
+  ]);
 
-  const grouped = await prisma.unregisteredDevicePing.groupBy({
-    by: ["serialNumber"],
-    _max: { createdAt: true },
-    _count: { _all: true },
-    orderBy: { _max: { createdAt: "desc" } },
-  });
-
-  const allPings = grouped
-    .filter((p) => !registered.has(p.serialNumber))
-    .map((p) => ({
+  res.json({
+    pings: pending.map((p) => ({
       serialNumber: p.serialNumber,
-      pingCount: p._count._all,
-      lastSeenAt: p._max.createdAt,
-    }));
-
-  const total = allPings.length;
-  const pings = allPings.slice((page - 1) * pageSize, page * pageSize);
-
-  res.json({ pings, total, page, pageSize });
+      pingCount: p.pingCount,
+      lastSeenAt: p.lastSeenAt,
+      secret: p.secret,
+    })),
+    total,
+    page,
+    pageSize,
+  });
 });
 
-// Deletes every logged ping for a serial number, clearing it from the
-// unregistered-devices triage list. super_admin only, matching the view.
+// Deletes every logged ping AND the PendingDevice summary row for a serial
+// number, clearing it from the unregistered-devices triage list entirely.
+// super_admin only, matching the view. (If the device keeps pinging, it
+// reappears - that's expected, same as before.)
 devicesRouter.delete("/unregistered-pings/:serialNumber", requireSuperAdmin, async (req, res) => {
-  const result = await prisma.unregisteredDevicePing.deleteMany({
-    where: { serialNumber: req.params.serialNumber },
-  });
-  if (result.count === 0) {
+  const [, pendingResult] = await prisma.$transaction([
+    prisma.unregisteredDevicePing.deleteMany({ where: { serialNumber: req.params.serialNumber } }),
+    prisma.pendingDevice.deleteMany({ where: { serialNumber: req.params.serialNumber } }),
+  ]);
+  if (pendingResult.count === 0) {
     res.status(404).json({ error: "Not found" });
     return;
   }
-  res.json({ ok: true, deleted: result.count });
+  res.json({ ok: true, deleted: pendingResult.count });
 });
 
 const unregisteredBulkDeleteSchema = z.object({ serialNumbers: z.array(z.string()).min(1).max(500) });
@@ -134,10 +145,11 @@ devicesRouter.post("/unregistered-pings/delete-bulk", requireSuperAdmin, async (
     res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
     return;
   }
-  const result = await prisma.unregisteredDevicePing.deleteMany({
-    where: { serialNumber: { in: parsed.data.serialNumbers } },
-  });
-  res.json({ ok: true, deleted: result.count });
+  const [, pendingResult] = await prisma.$transaction([
+    prisma.unregisteredDevicePing.deleteMany({ where: { serialNumber: { in: parsed.data.serialNumbers } } }),
+    prisma.pendingDevice.deleteMany({ where: { serialNumber: { in: parsed.data.serialNumbers } } }),
+  ]);
+  res.json({ ok: true, deleted: pendingResult.count });
 });
 
 // Lightweight, capped (not fully paginated) list for populating <select>
@@ -170,13 +182,27 @@ devicesRouter.post("/claim", async (req, res) => {
     return;
   }
 
-  const device = await prisma.device
-    .create({
-      data: {
-        serialNumber: parsed.data.serialNumber,
-        companyId: parsed.data.companyId,
-        label: parsed.data.label,
-      },
+  // Whatever secret this SN has been pinging with (if any) carries straight
+  // into the new Device - the admin doesn't reconfigure anything, the
+  // device is already sending it.
+  const pending = await prisma.pendingDevice.findUnique({
+    where: { serialNumber: parsed.data.serialNumber },
+  });
+
+  const device = await prisma
+    .$transaction(async (tx) => {
+      const created = await tx.device.create({
+        data: {
+          serialNumber: parsed.data.serialNumber,
+          companyId: parsed.data.companyId,
+          label: parsed.data.label,
+          deviceSecret: pending?.secret ?? null,
+        },
+      });
+      if (pending) {
+        await tx.pendingDevice.delete({ where: { serialNumber: parsed.data.serialNumber } });
+      }
+      return created;
     })
     .catch((err) => {
       if (err?.code === "P2002") return "conflict" as const;
@@ -187,7 +213,9 @@ devicesRouter.post("/claim", async (req, res) => {
     res.status(409).json({ error: "A device with this serial number is already registered" });
     return;
   }
-  res.status(201).json({ device: toDeviceListItem(device) });
+  // Full (unmasked) object, same as create/update - the admin needs to see
+  // the carried-over deviceSecret to confirm it matches the physical device.
+  res.status(201).json({ device });
 });
 
 devicesRouter.get("/", async (req, res) => {
@@ -235,6 +263,10 @@ const createSchema = z.object({
   companyId: z.string().min(1),
   serialNumber: z.string().min(1),
   label: z.string().optional(),
+  // Unlike webhookSecret (system-generated only), this is whatever the
+  // admin plans to put in the device's own Cloud Server URL - they own the
+  // value, we just store and compare it. Left blank = open/legacy for now.
+  deviceSecret: z.string().min(1).optional(),
   webhookUrl: z.string().url().optional(),
   webhookEnabled: z.boolean().optional(),
   webhookHeaders: headersSchema,
@@ -275,6 +307,9 @@ devicesRouter.post("/", async (req, res) => {
 
 const updateSchema = z.object({
   label: z.string().optional(),
+  // Direct edit (view/copy/overwrite/clear), unlike webhookSecret which
+  // only supports regenerate - the admin owns this value, not us.
+  deviceSecret: z.string().min(1).nullable().optional(),
   webhookUrl: z.string().url().nullable().optional(),
   webhookEnabled: z.boolean().optional(),
   webhookHeaders: headersSchema,

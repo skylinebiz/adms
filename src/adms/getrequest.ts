@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../db/client";
 import { deviceLogger } from "../logger";
-import { findDeviceBySerial, logUnregisteredPing, touchDevice } from "./deviceLookup";
+import { resolveDevice, sendRejected, touchDevice } from "./deviceLookup";
 
 // GET /iclock/getrequest?SN=... - device polls for pending commands.
 // v1: returns queued DeviceCommand rows (if any), formatted one per line as
@@ -10,10 +10,13 @@ export async function handleGetRequest(req: Request, res: Response) {
   const sn = String(req.query.SN ?? "");
   deviceLogger.info({ sn }, "getrequest poll");
 
-  const device = await findDeviceBySerial(sn);
+  const { device, trusted } = await resolveDevice(req);
   if (!device) {
-    await logUnregisteredPing(req, sn);
     res.status(200).type("text/plain; charset=UTF-8").send("OK");
+    return;
+  }
+  if (!trusted) {
+    sendRejected(res);
     return;
   }
 

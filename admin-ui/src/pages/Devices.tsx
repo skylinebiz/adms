@@ -73,6 +73,7 @@ export default function Devices() {
                   {user?.role === "SUPER_ADMIN" && <th>Company</th>}
                   <th>Status</th>
                   <th>Last seen</th>
+                  <th>Secured</th>
                   <th>Webhook</th>
                   <th></th>
                 </tr>
@@ -90,6 +91,17 @@ export default function Devices() {
                     </td>
                     <td>
                       {d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : <span className="muted">never</span>}
+                    </td>
+                    <td>
+                      {d.deviceSecretSet ? (
+                        <span className="badge badge-delivered" title="Requests without the matching secret are rejected">
+                          secured
+                        </span>
+                      ) : (
+                        <span className="badge badge-offline" title="Open on the legacy URL - anyone who reaches the server can send data as this device">
+                          legacy
+                        </span>
+                      )}
                     </td>
                     <td>
                       {d.webhookUrlMasked ? (
@@ -123,7 +135,7 @@ export default function Devices() {
                 ))}
                 {devices.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="muted">
+                    <td colSpan={8} className="muted">
                       No devices registered yet.
                     </td>
                   </tr>

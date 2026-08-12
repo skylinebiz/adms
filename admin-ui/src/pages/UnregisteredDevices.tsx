@@ -6,7 +6,9 @@ import Pagination from "../components/Pagination";
 const PAGE_SIZE = 25;
 
 export default function UnregisteredDevices() {
-  const [pings, setPings] = useState<{ serialNumber: string; pingCount: number; lastSeenAt: string }[]>([]);
+  const [pings, setPings] = useState<
+    { serialNumber: string; pingCount: number; lastSeenAt: string; secret: string | null }[]
+  >([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
@@ -83,8 +85,10 @@ export default function UnregisteredDevices() {
     <div>
       <h2>Unregistered Devices</h2>
       <p className="muted">
-        These serial numbers pinged /iclock/* but aren't assigned to a company yet. Claim one into a company to
-        start capturing its punches, or delete it if it's just noise.
+        These serial numbers pinged /iclock/* but aren't assigned to a company yet. If one arrived via a secret-scoped
+        URL, that secret is captured here and carries straight into the device record when you claim it - nothing to
+        reconfigure on the device afterward. Claim one into a company to start capturing its punches, or delete it if
+        it's just noise.
       </p>
       {error && <div className="error-banner">{error}</div>}
 
@@ -112,6 +116,7 @@ export default function UnregisteredDevices() {
                       />
                     </th>
                     <th>Serial number</th>
+                    <th>Secret</th>
                     <th>Ping count</th>
                     <th>Last seen</th>
                     <th>Claim into company</th>
@@ -130,6 +135,13 @@ export default function UnregisteredDevices() {
                       </td>
                       <td>
                         <code className="mono">{p.serialNumber}</code>
+                      </td>
+                      <td>
+                        {p.secret ? (
+                          <code className="mono">{p.secret}</code>
+                        ) : (
+                          <span className="muted">none (open path)</span>
+                        )}
                       </td>
                       <td>{p.pingCount}</td>
                       <td>{new Date(p.lastSeenAt).toLocaleString()}</td>
@@ -162,7 +174,7 @@ export default function UnregisteredDevices() {
                   ))}
                   {pings.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="muted">
+                      <td colSpan={7} className="muted">
                         No unregistered pings recorded.
                       </td>
                     </tr>

@@ -33,6 +33,12 @@ you put a TLS-terminating reverse proxy (nginx, Caddy, a cloud load
 balancer) in front of `server`'s port `8080` — worth doing even on a private
 network, since admin session cookies and credentials pass through it.
 
+If you do need to reach devices over a network you don't fully trust, see
+**per-device URL secrets** below — it stops SN spoofing/forgery (anyone who
+knows or guesses a serial number can no longer inject fake punch data for
+it), but it is **not** encryption. It doesn't replace the LAN/VPN
+recommendation above; it's a second layer on top of it.
+
 ## Architecture
 
 - **`server.ts`** — the only process devices ever talk to. Serves the
@@ -64,6 +70,37 @@ Before a device's punches will be captured, register its serial number (SN)
 under a company in the admin panel (`/admin` → Devices → "Register device").
 Until then, its pings are still logged (see **Unregistered Devices** in the
 admin panel) so you can "claim" it into a company once you see it show up.
+
+### Per-device URL secrets (recommended once a device is registered)
+
+Serial numbers aren't secret — they're visible throughout the admin panel —
+so on their own they're not proof a request actually came from the real
+device. Fix: some ZKTeco firmware accepts a path in the **Server address**
+field, e.g. `192.168.1.10:8080/<secret>`, and appends its usual
+`/iclock/...` suffixes after that base. Whatever string you put there
+becomes that device's `deviceSecret`:
+
+- **Pick the secret yourself** (or use "Generate" in the device's edit
+  drawer) and put the full URL — host:port **and** the secret — into the
+  device's Cloud Server Setting *before* or *after* registering it in the
+  admin panel; either order works.
+- If the device pings in with a secret **before** you've registered it, the
+  secret is captured automatically and carried into the device record the
+  moment you claim it from **Unregistered Devices** — nothing to
+  reconfigure on the device afterward.
+- Once a device has a secret on file, any request claiming its SN with a
+  missing or wrong secret is **rejected outright** (`401`, not the usual
+  `OK`) — the one exception to this project's "always ack OK" rule, since
+  it exists specifically to protect a real, already-registered device.
+- A device with no secret configured (`deviceSecret` unset) stays fully
+  open on the plain `/iclock/...` URL — this is the default for every
+  existing/legacy device and isn't a forced migration; secure devices one
+  at a time whenever you get to it.
+- Secrets don't need to be unique across devices (nothing stops you from
+  reusing one, though there's no reason to) — the server always looks a
+  device up by SN first and only uses the secret to validate that specific
+  request, so reuse doesn't create any lookup ambiguity on our side, just a
+  weaker guarantee for whichever devices share it.
 
 ## Running with Docker (recommended)
 

@@ -61,6 +61,12 @@ model Device {
   status         DeviceStatus @default(UNKNOWN)
   lastSeenAt     DateTime?
 
+  // Path secret the device's own Cloud Server URL is configured with
+  // (`http://host:port/<deviceSecret>`, firmware appends /iclock/... after
+  // that). Not required to be globally unique - lookup is always by SN,
+  // this only validates the request against the SN it claims. null means
+  // "never secured" and stays fully open on the legacy plain /iclock path.
+  deviceSecret        String?
   webhookUrl          String?
   webhookSecret       String?
   webhookEnabled      Boolean  @default(false)
@@ -171,6 +177,23 @@ model UnregisteredDevicePing {
 
   @@index([serialNumber])
   @@map("unregistered_device_pings")
+}
+
+// One row per not-yet-claimed SN, summarizing what's currently known about
+// it - in particular the secret it's been pinging with, if any, captured on
+// first contact so it carries straight through to the Device record when an
+// admin claims it (no separate provisioning step). See deviceLookup.ts for
+// the adopt/no-adopt rules that keep `secret` from being silently
+// overwritten by a mismatched later ping.
+model PendingDevice {
+  id           String   @id @default(cuid())
+  serialNumber String   @unique
+  secret       String?
+  firstSeenAt  DateTime @default(now())
+  lastSeenAt   DateTime @default(now())
+  pingCount    Int      @default(1)
+
+  @@map("pending_devices")
 }
 
 // Raw dump of any non-ATTLOG data a *registered* device pushes to

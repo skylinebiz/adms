@@ -5,7 +5,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { config } from "./config";
 import { appLogger as logger } from "./logger";
-import { admsRouter } from "./adms/router";
+import { admsRouter, clearReservedSecret } from "./adms/router";
 import { adminApiRouter } from "./admin/router";
 import { errorHandler } from "./middleware/errorHandler";
 import { seedBootstrapAdmin } from "./admin/seed";
@@ -17,13 +17,25 @@ async function main() {
   app.disable("x-powered-by");
 
   // --- Device-facing ADMS routes: unauthenticated, no CSRF, no JSON body
-  // parser ahead of them. Mounted first and in complete isolation from the
-  // admin middleware stack below. ---
+  // parser ahead of them. Both mounts sit in complete isolation from the
+  // admin middleware stack below (registered before it, not after) so
+  // neither ever passes through cors/json/cookie-parser.
+  //
+  // The plain /iclock mount is the legacy open path. The /:secret/iclock
+  // mount is new: a device's Cloud Server URL can include a path
+  // (`http://host:port/<secret>`), and its firmware appends the usual
+  // /iclock/* suffixes after that base - only this mount populates
+  // req.params.secret. Reserved words (admin/api/health) can never
+  // function as a secret even though the wildcard would otherwise accept
+  // any string here; clearReservedSecret strips it before the shared
+  // admsRouter ever sees it, on top of the fact that neither /admin nor
+  // /api/admin has "iclock" as its second path segment, so a real
+  // collision with those fixed routes is unreachable regardless.
   app.use("/iclock", admsRouter);
+  app.use("/:secret/iclock", clearReservedSecret, admsRouter);
 
   // --- Admin API: JSON body parsing, cookies, CORS, auth. Never applies to
-  // /iclock/* because it's registered after that mount and admsRouter does
-  // not call next() past its own routes for unmatched paths outside /iclock. ---
+  // /iclock/* because both ADMS mounts are registered before this point. ---
   app.use(
     cors({
       origin: process.env.ADMIN_UI_ORIGIN ?? true,

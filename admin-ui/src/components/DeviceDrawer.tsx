@@ -52,6 +52,15 @@ function rowsToHeaders(rows: HeaderRow[]): Record<string, string> | null {
   return Object.keys(obj).length ? obj : null;
 }
 
+// Client-side convenience only - the value that ends up in the field is
+// what actually gets saved and configured on the device, so it doesn't
+// need to come from the server the way webhookSecret does.
+function generateRandomSecret(): string {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 export default function DeviceDrawer({ deviceId, mode, companies, defaultCompanyId, onClose, onSaved }: Props) {
   const [device, setDevice] = useState<Device | null>(null);
   const [companyId, setCompanyId] = useState(defaultCompanyId ?? companies[0]?.id ?? "");
@@ -59,6 +68,7 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
   const [label, setLabel] = useState("");
   const [webhookUrl, setWebhookUrl] = useState("");
   const [webhookEnabled, setWebhookEnabled] = useState(false);
+  const [deviceSecret, setDeviceSecret] = useState("");
   const [showSecret, setShowSecret] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -81,6 +91,7 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
         setLabel(device.label ?? "");
         setWebhookUrl(device.webhookUrl ?? "");
         setWebhookEnabled(device.webhookEnabled);
+        setDeviceSecret(device.deviceSecret ?? "");
         setHeaderRows(headersToRows(device.webhookHeaders));
         if (device.webhookBodyTemplate) {
           setUseCustomBody(true);
@@ -122,6 +133,7 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
           companyId,
           serialNumber,
           label: label || undefined,
+          deviceSecret: deviceSecret || undefined,
           webhookUrl: webhookUrl || undefined,
           webhookEnabled,
           webhookHeaders,
@@ -130,6 +142,7 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
       } else if (deviceId) {
         await api.updateDevice(deviceId, {
           label,
+          deviceSecret: deviceSecret || null,
           webhookUrl: webhookUrl || null,
           webhookEnabled,
           webhookHeaders,
@@ -247,6 +260,30 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
               </div>
             </div>
           )}
+
+          <div className="field">
+            <label>Device secret</label>
+            <div className="muted" style={{ marginBottom: 6 }}>
+              Whatever you put in this device's own COMM → Cloud Server Setting URL. Once set, any request claiming
+              this device's serial number without the matching secret is rejected outright.
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                value={deviceSecret}
+                onChange={(e) => setDeviceSecret(e.target.value)}
+                placeholder="(unsecured - open on the legacy URL)"
+              />
+              <button type="button" className="btn btn-sm" onClick={() => setDeviceSecret(generateRandomSecret())}>
+                Generate
+              </button>
+            </div>
+            {deviceSecret && (
+              <div style={{ marginTop: 8 }}>
+                <label>Cloud Server URL</label>
+                <input readOnly value={`${window.location.origin}/${deviceSecret}`} onFocus={(e) => e.target.select()} />
+              </div>
+            )}
+          </div>
 
           <div className="field">
             <label>Webhook URL</label>

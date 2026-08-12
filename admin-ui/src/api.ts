@@ -84,6 +84,8 @@ export interface Device {
   webhookEnabled: boolean;
   webhookHeaders?: Record<string, string> | null;
   webhookBodyTemplate?: unknown | null;
+  deviceSecret?: string | null;
+  deviceSecretSet?: boolean;
   createdAt: string;
   company?: { id: string; name: string };
 }
@@ -200,6 +202,7 @@ export const api = {
     companyId: string;
     serialNumber: string;
     label?: string;
+    deviceSecret?: string;
     webhookUrl?: string;
     webhookEnabled?: boolean;
     webhookHeaders?: Record<string, string> | null;
@@ -209,6 +212,7 @@ export const api = {
     id: string,
     data: Partial<{
       label: string;
+      deviceSecret: string | null;
       webhookUrl: string | null;
       webhookEnabled: boolean;
       webhookHeaders: Record<string, string> | null;
@@ -227,9 +231,10 @@ export const api = {
     }
   ) => post<TestWebhookResult>(`/devices/${id}/test-webhook`, overrides),
   listUnregisteredPings: (params: PageParams = {}) =>
-    get<{ pings: { serialNumber: string; pingCount: number; lastSeenAt: string }[] } & Paginated<unknown>>(
-      `/devices/unregistered-pings${buildQuery({ page: params.page, pageSize: params.pageSize })}`
-    ),
+    get<
+      { pings: { serialNumber: string; pingCount: number; lastSeenAt: string; secret: string | null }[] } &
+        Paginated<unknown>
+    >(`/devices/unregistered-pings${buildQuery({ page: params.page, pageSize: params.pageSize })}`),
   claimDevice: (data: { serialNumber: string; companyId: string; label?: string }) =>
     post<{ device: Device }>("/devices/claim", data),
   deleteUnregisteredPing: (serialNumber: string) =>

@@ -55,7 +55,14 @@
       "Bash(curl -s \"http://localhost:8080/iclock/getrequest?SN=GHOST999\")",
       "Bash(powershell -Command \"Stop-Process -Id 37388,36220 -Force -ErrorAction SilentlyContinue\")",
       "Bash(powershell -Command \"Get-CimInstance Win32_Process -Filter \\\\\"Name='node.exe'\\\\\" | Select-Object ProcessId,CommandLine\")",
-      "Bash(powershell -Command \"Stop-Process -Id 19672 -Force -ErrorAction SilentlyContinue\")"
+      "Bash(powershell -Command \"Stop-Process -Id 19672 -Force -ErrorAction SilentlyContinue\")",
+      "Bash(docker info *)",
+      "Bash(curl -s -c /tmp/cookies.txt -X POST http://localhost:8080/api/admin/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"admin@example.com\",\"password\":\"change-me-immediately\"}' -w '\\\\nHTTP:%{http_code}\\\\n')",
+      "Bash(node -e \"const bcrypt=require\\('bcryptjs'\\); bcrypt.hash\\('E2ETestPass123', 12\\).then\\(h=>console.log\\(h\\)\\)\")",
+      "Bash(node -e \"const bcrypt=require\\('bcrypt'\\); bcrypt.hash\\('E2ETestPass123', 12\\).then\\(h=>console.log\\(h\\)\\)\")",
+      "Bash(curl -s -c /tmp/cookies.txt -X POST http://localhost:8080/api/admin/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"admin@example.com\",\"password\":\"E2ETestPass123\"}' -w '\\\\nHTTP:%{http_code}\\\\n')",
+      "Bash(curl -s -b /tmp/cookies.txt http://localhost:8080/api/admin/companies/options -w \"\\\\nHTTP:%{http_code}\\\\n\")",
+      "Bash(curl -s -b /tmp/cookies.txt -X POST http://localhost:8080/api/admin/devices/claim -H 'Content-Type: application/json' -d '{\"serialNumber\":\"E2E_TEST_SN\",\"companyId\":\"cmspz1ioa0002sxh5xqywdwe2\"}' -w '\\\\nHTTP:%{http_code}\\\\n')"
     ]
   }
 }
