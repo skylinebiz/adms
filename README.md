@@ -9,6 +9,30 @@ Protocol behavior mirrors [`saifulcoder/adms-server-ZKTeco`](https://github.com/
 (single-tenant PHP reference), reimplemented in Node/TypeScript with
 multitenancy and per-device webhooks added on top.
 
+## ⚠️ Security warning: device traffic is unencrypted
+
+The `/iclock/*` ADMS endpoints are plain HTTP, by protocol necessity — ZKTeco
+firmware cannot do TLS, logins, custom headers, or CSRF tokens (see
+[Architecture](#architecture)). That means everything a device sends —
+serial numbers, punch/attendance data, raw OPERLOG/USERINFO/FINGERTMP/FACE
+payloads — travels **unencrypted and unauthenticated** between the device
+and this server. Anyone on the same network path can read or spoof that
+traffic.
+
+**Do not expose `/iclock/*` directly to the public internet.** Only run this
+server where the network path between it and your devices is trusted:
+
+- A **private LAN** the devices and server both sit on, with no direct
+  internet exposure of the ADMS port, or
+- A **VPN/private tunnel** (site-to-site VPN, WireGuard, Tailscale, etc.)
+  between the device's network and the server if they aren't on the same LAN.
+
+The admin panel (`/api/admin/*`, `/admin`) is authenticated (JWT session
+cookies, bcrypt-hashed passwords) but still travels over plain HTTP unless
+you put a TLS-terminating reverse proxy (nginx, Caddy, a cloud load
+balancer) in front of `server`'s port `8080` — worth doing even on a private
+network, since admin session cookies and credentials pass through it.
+
 ## Architecture
 
 - **`server.ts`** — the only process devices ever talk to. Serves the
