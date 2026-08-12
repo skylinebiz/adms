@@ -43,7 +43,7 @@ export async function handleCdataGet(req: Request, res: Response) {
   sendPlainText(res, buildOptionsResponse());
 }
 
-async function storeAttlog(deviceId: string, body: string) {
+async function storeAttlog(deviceId: string, hasWebhook: boolean, body: string) {
   const { records, errors } = parseAttlogBody(body);
 
   for (const err of errors) {
@@ -66,6 +66,11 @@ async function storeAttlog(deviceId: string, body: string) {
           reserved1: record.reserved1,
           reserved2: record.reserved2,
           rawLine: record.rawLine,
+          // No webhook configured right now -> hold it back from automatic
+          // delivery even if a webhook gets configured later. Only a fresh
+          // punch ingested after that point, or an explicit admin retry,
+          // should ever go out for this record.
+          webhookHeld: !hasWebhook,
         },
       });
       inserted += 1;
@@ -105,7 +110,8 @@ export async function handleCdataPost(req: Request, res: Response) {
 
   try {
     if (table === "ATTLOG") {
-      await storeAttlog(device.id, body);
+      const hasWebhook = Boolean(device.webhookEnabled && device.webhookUrl);
+      await storeAttlog(device.id, hasWebhook, body);
     } else {
       // OPERLOG / USERINFO / FINGERTMP / FACE / photos / anything else -
       // captured verbatim so it's browsable per-device in the admin panel's

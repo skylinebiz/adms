@@ -4,6 +4,7 @@ import { api, ApiError, DeviceOption, PunchRecord } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useSelection } from "../hooks/useSelection";
 import { formatPunchTime } from "../utils/formatTime";
+import { webhookStatusLabel } from "../utils/webhookStatus";
 import DeliveryLogDrawer from "./DeliveryLogDrawer";
 import Pagination from "./Pagination";
 
@@ -119,6 +120,7 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
               <option value="delivered">Delivered</option>
               <option value="pending">Pending</option>
               <option value="failed">Failed</option>
+              <option value="not_applicable">NA (no webhook)</option>
             </select>
           </div>
         )}
@@ -187,7 +189,7 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
                     <td>{formatPunchTime(r.punchTime)}</td>
                     <td>{r.verifyMode}</td>
                     <td>
-                      <span className={`badge badge-${r.webhookStatus}`}>{r.webhookStatus}</span>
+                      <span className={`badge badge-${r.webhookStatus}`}>{webhookStatusLabel(r.webhookStatus)}</span>
                     </td>
                     <td>{r.webhookAttempts}</td>
                     {mode === "failed" && (

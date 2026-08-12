@@ -51,7 +51,11 @@
       "Bash(node -e \"console.log\\(process.version, Intl.DateTimeFormat\\(\\).resolvedOptions\\(\\).timeZone\\)\")",
       "Bash(powershell -Command \"Start-Process 'C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe'\")",
       "Bash(sleep 2; cat /tmp/server-out.log)",
-      "Bash(powershell -Command \"Stop-Process -Id 37152 -Force -ErrorAction SilentlyContinue\")"
+      "Bash(powershell -Command \"Stop-Process -Id 37152 -Force -ErrorAction SilentlyContinue\")",
+      "Bash(curl -s \"http://localhost:8080/iclock/getrequest?SN=GHOST999\")",
+      "Bash(powershell -Command \"Stop-Process -Id 37388,36220 -Force -ErrorAction SilentlyContinue\")",
+      "Bash(powershell -Command \"Get-CimInstance Win32_Process -Filter \\\\\"Name='node.exe'\\\\\" | Select-Object ProcessId,CommandLine\")",
+      "Bash(powershell -Command \"Stop-Process -Id 19672 -Force -ErrorAction SilentlyContinue\")"
     ]
   }
 }

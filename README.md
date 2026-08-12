@@ -245,6 +245,22 @@ visible under **Failed Webhooks** in the admin panel for manual or bulk
 retry ("Retry now" resets attempts/backoff so the worker picks it up on its
 next poll).
 
+### "NA" status and configuring a webhook after punches already exist
+
+A punch shows **NA** (not "pending") in the admin panel whenever nothing
+will happen to it automatically right now — either its device has no
+webhook configured/enabled, or it was captured *before* the device had a
+webhook and hasn't been retried since.
+
+That second case matters: if a device already has a backlog of punches and
+you configure a webhook on it afterward, that backlog is **not** auto-sent.
+Every punch remembers whether its device had a webhook at the moment it was
+ingested (`PunchRecord.webhookHeld`); only punches ingested *after* the
+webhook exists are picked up automatically. To send an old backlog punch
+anyway, use **Retry now** (or bulk retry) on it explicitly — that's the only
+thing that clears the hold. This avoids a surprise burst of delivery calls
+the instant a webhook URL is saved.
+
 ### Custom headers and request body shape
 
 The default payload shape above isn't always what a receiving endpoint

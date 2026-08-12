@@ -144,7 +144,8 @@ export interface PunchRecord {
   nextAttemptAt: string;
   lastWebhookError: string | null;
   webhookDeliveredAt: string | null;
-  webhookStatus: "delivered" | "pending" | "failed";
+  webhookHeld: boolean;
+  webhookStatus: "delivered" | "pending" | "failed" | "not_applicable";
   device?: { id: string; serialNumber: string; label: string | null; companyId: string };
 }
 
@@ -231,6 +232,10 @@ export const api = {
     ),
   claimDevice: (data: { serialNumber: string; companyId: string; label?: string }) =>
     post<{ device: Device }>("/devices/claim", data),
+  deleteUnregisteredPing: (serialNumber: string) =>
+    del<{ ok: true; deleted: number }>(`/devices/unregistered-pings/${encodeURIComponent(serialNumber)}`),
+  deleteUnregisteredPingsBulk: (serialNumbers: string[]) =>
+    post<{ ok: true; deleted: number }>("/devices/unregistered-pings/delete-bulk", { serialNumbers }),
   getDeviceRawLogs: (deviceId: string, params: { table?: string } & PageParams = {}) =>
     get<{ logs: DeviceRawLog[] } & Paginated<DeviceRawLog>>(
       `/devices/${deviceId}/raw-logs${buildQuery({ table: params.table, page: params.page, pageSize: params.pageSize })}`

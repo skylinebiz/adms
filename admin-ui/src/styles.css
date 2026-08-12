@@ -259,6 +259,7 @@ label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom
 .badge-delivered { background: var(--success-tint); color: var(--success-text); }
 .badge-pending { background: var(--warning-tint); color: var(--warning-text); }
 .badge-failed { background: var(--danger-tint); color: var(--danger); }
+.badge-not_applicable { background: var(--neutral-tint); color: var(--text-muted); }
 .badge-online { background: var(--success-tint); color: var(--success-text); }
 .badge-offline { background: var(--neutral-tint); color: var(--text-muted); }
 .badge-unknown { background: var(--neutral-tint); color: var(--text-muted); }

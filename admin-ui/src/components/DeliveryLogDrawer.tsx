@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, PunchRecord, WebhookDelivery } from "../api";
 import { formatPunchTime } from "../utils/formatTime";
+import { webhookStatusLabel } from "../utils/webhookStatus";
 import Pagination from "./Pagination";
 
 const PAGE_SIZE = 10;
@@ -39,7 +40,9 @@ export default function DeliveryLogDrawer({ punchRecordId, onClose }: { punchRec
                   Device: {punchRecord.device?.label ?? punchRecord.device?.serialNumber}
                 </div>
                 <div style={{ marginTop: 8 }}>
-                  <span className={`badge badge-${punchRecord.webhookStatus}`}>{punchRecord.webhookStatus}</span>{" "}
+                  <span className={`badge badge-${punchRecord.webhookStatus}`}>
+                    {webhookStatusLabel(punchRecord.webhookStatus)}
+                  </span>{" "}
                   <span className="muted">{punchRecord.webhookAttempts} attempt(s)</span>
                 </div>
                 {punchRecord.lastWebhookError && (
@@ -69,7 +72,8 @@ export default function DeliveryLogDrawer({ punchRecordId, onClose }: { punchRec
                   <pre
                     style={{
                       marginTop: 6,
-                      background: "#f3f4f6",
+                      background: "var(--neutral-tint)",
+                      color: "var(--text)",
                       padding: 8,
                       borderRadius: 6,
                       fontSize: 11,

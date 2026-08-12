@@ -113,6 +113,33 @@ devicesRouter.get("/unregistered-pings", async (req, res) => {
   res.json({ pings, total, page, pageSize });
 });
 
+// Deletes every logged ping for a serial number, clearing it from the
+// unregistered-devices triage list. super_admin only, matching the view.
+devicesRouter.delete("/unregistered-pings/:serialNumber", requireSuperAdmin, async (req, res) => {
+  const result = await prisma.unregisteredDevicePing.deleteMany({
+    where: { serialNumber: req.params.serialNumber },
+  });
+  if (result.count === 0) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  res.json({ ok: true, deleted: result.count });
+});
+
+const unregisteredBulkDeleteSchema = z.object({ serialNumbers: z.array(z.string()).min(1).max(500) });
+
+devicesRouter.post("/unregistered-pings/delete-bulk", requireSuperAdmin, async (req, res) => {
+  const parsed = unregisteredBulkDeleteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
+    return;
+  }
+  const result = await prisma.unregisteredDevicePing.deleteMany({
+    where: { serialNumber: { in: parsed.data.serialNumbers } },
+  });
+  res.json({ ok: true, deleted: result.count });
+});
+
 // Lightweight, capped (not fully paginated) list for populating <select>
 // dropdowns, where you want "all devices" rather than one page of them.
 devicesRouter.get("/options", async (req, res) => {

@@ -32,6 +32,7 @@ async function claimBatch(batchSize: number): Promise<string[]> {
       FROM punch_records pr
       JOIN devices d ON d.id = pr."deviceId"
       WHERE pr."webhookDelivered" = false
+        AND pr."webhookHeld" = false
         AND pr."nextAttemptAt" <= now()
         AND d."webhookEnabled" = true
         AND d."webhookUrl" IS NOT NULL

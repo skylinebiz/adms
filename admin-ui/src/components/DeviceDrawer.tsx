@@ -402,7 +402,8 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
                     <summary style={{ cursor: "pointer" }}>Request body sent</summary>
                     <pre
                       style={{
-                        background: "#f3f4f6",
+                        background: "var(--neutral-tint)",
+                        color: "var(--text)",
                         padding: 8,
                         borderRadius: 6,
                         fontSize: 11,
@@ -420,7 +421,8 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
                       <summary style={{ cursor: "pointer" }}>Response body</summary>
                       <pre
                         style={{
-                          background: "#f3f4f6",
+                          background: "var(--neutral-tint)",
+                          color: "var(--text)",
                           padding: 8,
                           borderRadius: 6,
                           fontSize: 11,

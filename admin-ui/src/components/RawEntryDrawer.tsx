@@ -21,7 +21,8 @@ function prettyJson(raw: string | null): string {
 }
 
 const preStyle: CSSProperties = {
-  background: "#f3f4f6",
+  background: "var(--neutral-tint)",
+  color: "var(--text)",
   padding: 8,
   borderRadius: 6,
   fontSize: 11,

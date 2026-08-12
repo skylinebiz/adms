@@ -108,6 +108,13 @@ model PunchRecord {
   nextAttemptAt      DateTime  @default(now())
   lastWebhookError   String?
   webhookDeliveredAt DateTime?
+  // True when this punch was ingested while its device had no webhook
+  // configured (or webhook disabled). Held records are never auto-picked-up
+  // by the worker, even after a webhook gets configured later - only new
+  // punches (ingested after configuration) or an explicit admin retry
+  // (which clears this flag) become eligible. Prevents a burst of stale
+  // backlog punches firing the moment someone sets a webhook URL.
+  webhookHeld        Boolean   @default(false)
 
   deliveries   WebhookDelivery[]
 
