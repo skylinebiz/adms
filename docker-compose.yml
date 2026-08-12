@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: adms
+      POSTGRES_PASSWORD: adms
+      POSTGRES_DB: adms
+    volumes:
+      - adms_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adms"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: applies migrations then exits. server/worker wait for this to
+  # finish successfully before they start, so a plain `docker compose up`
+  # never races multiple containers against the schema.
+  migrate:
+    build: .
+    command: npx prisma migrate deploy
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://adms:adms@postgres:5432/adms
+
+  server:
+    build: .
+    command: node dist/server.js
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://adms:adms@postgres:5432/adms
+      PORT: 8080
+      JWT_SECRET: ${JWT_SECRET}
+      ADMIN_SESSION_COOKIE_NAME: adms_admin
+      ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD}
+    ports:
+      - "8080:8080"
+
+  worker:
+    build: .
+    command: node dist/worker.js
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://adms:adms@postgres:5432/adms
+      WEBHOOK_MAX_ATTEMPTS: ${WEBHOOK_MAX_ATTEMPTS:-5}
+      WEBHOOK_TIMEOUT_MS: ${WEBHOOK_TIMEOUT_MS:-8000}
+      WORKER_POLL_INTERVAL_MS: ${WORKER_POLL_INTERVAL_MS:-3000}
+      WORKER_BATCH_SIZE: ${WORKER_BATCH_SIZE:-50}
+
+volumes:
+  adms_pgdata:

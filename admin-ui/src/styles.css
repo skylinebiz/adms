@@ -1,0 +1,100 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: #f5f6f8;
+  color: #1b1f24;
+}
+a { color: #2563eb; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.app-shell { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 220px;
+  background: #14181f;
+  color: #cbd2dc;
+  padding: 20px 0;
+  flex-shrink: 0;
+}
+.sidebar h1 { font-size: 15px; color: #fff; padding: 0 20px 16px; margin: 0; }
+.sidebar nav a {
+  display: block;
+  padding: 10px 20px;
+  color: #cbd2dc;
+  font-size: 14px;
+}
+.sidebar nav a.active, .sidebar nav a:hover { background: #1f2530; color: #fff; text-decoration: none; }
+.sidebar .user-info { padding: 16px 20px; border-top: 1px solid #262b36; margin-top: 16px; font-size: 12px; color: #8b93a1; }
+
+.main { flex: 1; padding: 28px 32px; max-width: 1200px; }
+.main h2 { margin-top: 0; }
+
+.card { background: #fff; border: 1px solid #e3e6ea; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+.card h3 { margin-top: 0; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eef0f2; white-space: nowrap; }
+th { color: #6b7280; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+tr:hover td { background: #fafbfc; }
+
+.btn {
+  display: inline-block;
+  padding: 7px 14px;
+  border-radius: 6px;
+  border: 1px solid #d0d5dd;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  color: #1b1f24;
+}
+.btn:hover { background: #f3f4f6; }
+.btn-primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+.btn-primary:hover { background: #1d4ed8; }
+.btn-danger { background: #dc2626; border-color: #dc2626; color: #fff; }
+.btn-danger:hover { background: #b91c1c; }
+.btn-sm { padding: 4px 9px; font-size: 12px; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+input, select {
+  padding: 7px 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  font-size: 13px;
+  width: 100%;
+}
+label { display: block; font-size: 12px; color: #4b5563; margin-bottom: 4px; font-weight: 500; }
+.field { margin-bottom: 14px; }
+.form-row { display: flex; gap: 12px; }
+.form-row > .field { flex: 1; }
+
+.badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+.badge-delivered { background: #dcfce7; color: #166534; }
+.badge-pending { background: #fef3c7; color: #92400e; }
+.badge-failed { background: #fee2e2; color: #991b1b; }
+.badge-online { background: #dcfce7; color: #166534; }
+.badge-offline { background: #f3f4f6; color: #6b7280; }
+.badge-unknown { background: #f3f4f6; color: #6b7280; }
+
+.error-banner { background: #fee2e2; color: #991b1b; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
+.notice-banner { background: #fef3c7; color: #92400e; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
+.muted { color: #6b7280; font-size: 12px; }
+
+.filters { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 16px; flex-wrap: wrap; }
+.filters .field { margin-bottom: 0; min-width: 150px; }
+
+.login-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #0f172a; }
+.login-box { background: #fff; padding: 32px; border-radius: 10px; width: 340px; }
+.login-box h1 { font-size: 18px; margin-top: 0; }
+
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(15, 23, 42, 0.5);
+  display: flex; align-items: flex-start; justify-content: flex-end;
+  z-index: 50;
+}
+.modal-drawer { background: #fff; width: 480px; max-width: 100%; height: 100%; overflow-y: auto; padding: 24px; }
+.modal-drawer h3 { margin-top: 0; }
+
+code.mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; background: #f3f4f6; padding: 1px 5px; border-radius: 4px; }
+
+.toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.pagination { display: flex; gap: 8px; align-items: center; margin-top: 12px; font-size: 13px; }

@@ -1,0 +1,267 @@
+const BASE = "/api/admin";
+
+export class ApiError extends Error {
+  status: number;
+  details?: unknown;
+  constructor(status: number, message: string, details?: unknown) {
+    super(message);
+    this.status = status;
+    this.details = details;
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    ...init,
+  });
+  const isJson = res.headers.get("content-type")?.includes("application/json");
+  const body = isJson ? await res.json().catch(() => null) : null;
+  if (!res.ok) {
+    throw new ApiError(res.status, body?.error ?? res.statusText, body?.details);
+  }
+  return body as T;
+}
+
+const get = <T>(path: string) => request<T>(path);
+const post = <T>(path: string, data?: unknown) =>
+  request<T>(path, { method: "POST", body: data ? JSON.stringify(data) : undefined });
+const patch = <T>(path: string, data?: unknown) =>
+  request<T>(path, { method: "PATCH", body: data ? JSON.stringify(data) : undefined });
+const del = <T>(path: string) => request<T>(path, { method: "DELETE" });
+
+function buildQuery(params: Record<string, string | number | undefined>): string {
+  const q = new URLSearchParams(
+    Object.entries(params).filter(([, v]) => v !== undefined && v !== "") as [string, string][]
+  ).toString();
+  return q ? `?${q}` : "";
+}
+
+export interface PageParams {
+  page?: number;
+  pageSize?: number;
+}
+
+export interface Paginated<T> {
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AdminUserSummary {
+  id: string;
+  email: string;
+  role: "SUPER_ADMIN" | "COMPANY_ADMIN";
+  companyId: string | null;
+  mustChangePassword: boolean;
+  createdAt?: string;
+}
+
+export interface Company {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { devices: number; adminUsers: number };
+}
+
+export interface CompanyOption {
+  id: string;
+  name: string;
+}
+
+export interface Device {
+  id: string;
+  companyId: string;
+  serialNumber: string;
+  label: string | null;
+  status: "UNKNOWN" | "ONLINE" | "OFFLINE";
+  lastSeenAt: string | null;
+  webhookUrl?: string | null;
+  webhookUrlMasked?: string | null;
+  webhookSecret?: string | null;
+  webhookEnabled: boolean;
+  webhookHeaders?: Record<string, string> | null;
+  webhookBodyTemplate?: unknown | null;
+  createdAt: string;
+  company?: { id: string; name: string };
+}
+
+export interface DeviceOption {
+  id: string;
+  serialNumber: string;
+  label: string | null;
+  companyId: string;
+}
+
+export interface DeviceRawLog {
+  id: string;
+  deviceId: string;
+  endpoint: string;
+  method: string;
+  table: string | null;
+  query: string | null;
+  headers: string | null;
+  rawBody: string | null;
+  createdAt: string;
+}
+
+export interface RawRequestLog {
+  id: string;
+  serialNumber: string | null;
+  endpoint: string;
+  method: string;
+  query: string | null;
+  headers: string | null;
+  rawBody: string | null;
+  createdAt: string;
+}
+
+export interface TestWebhookResult {
+  sentBody: unknown;
+  sentHeaders: Record<string, string>;
+  result: {
+    success: boolean;
+    statusCode: number | null;
+    responseBody: string | null;
+    error: string | null;
+  };
+}
+
+export interface PunchRecord {
+  id: string;
+  deviceId: string;
+  devicePin: string;
+  punchTime: string;
+  status: number;
+  verifyMode: number;
+  workCode: string | null;
+  rawLine: string;
+  receivedAt: string;
+  webhookDelivered: boolean;
+  webhookAttempts: number;
+  nextAttemptAt: string;
+  lastWebhookError: string | null;
+  webhookDeliveredAt: string | null;
+  webhookStatus: "delivered" | "pending" | "failed";
+  device?: { id: string; serialNumber: string; label: string | null; companyId: string };
+}
+
+export interface WebhookDelivery {
+  id: string;
+  punchRecordId: string;
+  url: string;
+  attempt: number;
+  statusCode: number | null;
+  responseBody: string | null;
+  delivered: boolean;
+  error: string | null;
+  createdAt: string;
+}
+
+export const api = {
+  login: (email: string, password: string) => post<{ user: AdminUserSummary }>("/auth/login", { email, password }),
+  logout: () => post<{ ok: true }>("/auth/logout"),
+  me: () => get<{ user: AdminUserSummary }>("/auth/me"),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    patch<{ ok: true }>("/auth/me/password", { currentPassword, newPassword }),
+
+  listCompanies: (params: PageParams = {}) =>
+    get<{ companies: Company[] } & Paginated<Company>>(
+      `/companies${buildQuery({ page: params.page, pageSize: params.pageSize })}`
+    ),
+  listCompanyOptions: () => get<{ companies: CompanyOption[] }>("/companies/options"),
+  createCompany: (name: string) => post<{ company: Company }>("/companies", { name }),
+  updateCompany: (id: string, name: string) => patch<{ company: Company }>(`/companies/${id}`, { name }),
+  deleteCompany: (id: string) => del<{ ok: true }>(`/companies/${id}`),
+
+  listAdminUsers: (params: { companyId?: string } & PageParams = {}) =>
+    get<{ adminUsers: AdminUserSummary[] } & Paginated<AdminUserSummary>>(
+      `/admin-users${buildQuery({ companyId: params.companyId, page: params.page, pageSize: params.pageSize })}`
+    ),
+  createAdminUser: (data: { email: string; password: string; role: string; companyId: string | null }) =>
+    post<{ adminUser: AdminUserSummary }>("/admin-users", data),
+  updateAdminUser: (id: string, data: Partial<{ email: string; role: string; companyId: string | null }>) =>
+    patch<{ adminUser: AdminUserSummary }>(`/admin-users/${id}`, data),
+  deleteAdminUser: (id: string) => del<{ ok: true }>(`/admin-users/${id}`),
+  resetAdminUserPassword: (id: string, newPassword: string) =>
+    post<{ ok: true }>(`/admin-users/${id}/reset-password`, { newPassword }),
+
+  listDevices: (params: { companyId?: string } & PageParams = {}) =>
+    get<{ devices: Device[] } & Paginated<Device>>(
+      `/devices${buildQuery({ companyId: params.companyId, page: params.page, pageSize: params.pageSize })}`
+    ),
+  listDeviceOptions: (companyId?: string) =>
+    get<{ devices: DeviceOption[] }>(`/devices/options${buildQuery({ companyId })}`),
+  getDevice: (id: string) => get<{ device: Device }>(`/devices/${id}`),
+  createDevice: (data: {
+    companyId: string;
+    serialNumber: string;
+    label?: string;
+    webhookUrl?: string;
+    webhookEnabled?: boolean;
+    webhookHeaders?: Record<string, string> | null;
+    webhookBodyTemplate?: unknown | null;
+  }) => post<{ device: Device }>("/devices", data),
+  updateDevice: (
+    id: string,
+    data: Partial<{
+      label: string;
+      webhookUrl: string | null;
+      webhookEnabled: boolean;
+      webhookHeaders: Record<string, string> | null;
+      webhookBodyTemplate: unknown | null;
+      regenerateSecret: boolean;
+    }>
+  ) => patch<{ device: Device }>(`/devices/${id}`, data),
+  deleteDevice: (id: string) => del<{ ok: true }>(`/devices/${id}`),
+  testWebhook: (
+    id: string,
+    overrides: {
+      url?: string;
+      secret?: string | null;
+      headers?: Record<string, string> | null;
+      bodyTemplate?: unknown | null;
+    }
+  ) => post<TestWebhookResult>(`/devices/${id}/test-webhook`, overrides),
+  listUnregisteredPings: (params: PageParams = {}) =>
+    get<{ pings: { serialNumber: string; pingCount: number; lastSeenAt: string }[] } & Paginated<unknown>>(
+      `/devices/unregistered-pings${buildQuery({ page: params.page, pageSize: params.pageSize })}`
+    ),
+  claimDevice: (data: { serialNumber: string; companyId: string; label?: string }) =>
+    post<{ device: Device }>("/devices/claim", data),
+  getDeviceRawLogs: (deviceId: string, params: { table?: string } & PageParams = {}) =>
+    get<{ logs: DeviceRawLog[] } & Paginated<DeviceRawLog>>(
+      `/devices/${deviceId}/raw-logs${buildQuery({ table: params.table, page: params.page, pageSize: params.pageSize })}`
+    ),
+
+  listRawRequests: (params: { serialNumber?: string; endpoint?: string } & PageParams = {}) =>
+    get<{ requests: RawRequestLog[] } & Paginated<RawRequestLog>>(
+      `/raw-requests${buildQuery({
+        serialNumber: params.serialNumber,
+        endpoint: params.endpoint,
+        page: params.page,
+        pageSize: params.pageSize,
+      })}`
+    ),
+
+  listPunchRecords: (params: Record<string, string | undefined>) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v) as [string, string][]).toString();
+    return get<{ records: PunchRecord[]; total: number; page: number; pageSize: number }>(
+      `/punch-records${q ? `?${q}` : ""}`
+    );
+  },
+  listFailedPunchRecords: (params: Record<string, string | undefined>) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v) as [string, string][]).toString();
+    return get<{ records: PunchRecord[]; total: number; page: number; pageSize: number }>(
+      `/punch-records/failed${q ? `?${q}` : ""}`
+    );
+  },
+  getDeliveries: (punchRecordId: string, params: PageParams = {}) =>
+    get<{ punchRecord: PunchRecord; deliveries: WebhookDelivery[] } & Paginated<WebhookDelivery>>(
+      `/punch-records/${punchRecordId}/deliveries${buildQuery({ page: params.page, pageSize: params.pageSize })}`
+    ),
+  retryPunchRecord: (id: string) => post<{ ok: true }>(`/punch-records/${id}/retry`),
+  retryBulk: (ids: string[]) => post<{ ok: true; retried: number }>("/punch-records/retry-bulk", { ids }),
+};

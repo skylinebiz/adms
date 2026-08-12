@@ -1,0 +1,8 @@
+node_modules/
+dist/
+admin-ui/node_modules/
+admin-ui/dist/
+admin-ui/tsconfig.tsbuildinfo
+.env
+*.log
+.DS_Store

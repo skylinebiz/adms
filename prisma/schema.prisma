@@ -1,0 +1,208 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  COMPANY_ADMIN
+}
+
+enum DeviceStatus {
+  UNKNOWN
+  ONLINE
+  OFFLINE
+}
+
+enum DeviceCommandStatus {
+  PENDING
+  SENT
+  ACKED
+  FAILED
+}
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  adminUsers AdminUser[]
+  devices    Device[]
+
+  @@map("companies")
+}
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  role         AdminRole @default(COMPANY_ADMIN)
+  companyId    String?
+  company      Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  mustChangePassword Boolean @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([companyId])
+  @@map("admin_users")
+}
+
+model Device {
+  id             String       @id @default(cuid())
+  companyId      String
+  company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  serialNumber   String       @unique
+  label          String?
+  status         DeviceStatus @default(UNKNOWN)
+  lastSeenAt     DateTime?
+
+  webhookUrl          String?
+  webhookSecret       String?
+  webhookEnabled      Boolean  @default(false)
+  // Extra headers sent with every webhook request, e.g. {"Authorization": "Bearer xyz"}.
+  // Values may reference punch placeholders (see webhookBodyTemplate) too.
+  webhookHeaders       Json?
+  // Custom JSON request body. String leaves may contain {{placeholder}} tokens
+  // (pin, punch_time, punch_time_unix, status, verify_mode, work_code,
+  // device_id, device_serial, company_id, company_name, received_at).
+  // A leaf that is *exactly* "{{name}}" is replaced with the typed value
+  // (number/string); placeholders embedded in a larger string are
+  // stringified and interpolated. Null/unset falls back to the default
+  // punch.created payload shape.
+  webhookBodyTemplate  Json?
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  punchRecords   PunchRecord[]
+  commands       DeviceCommand[]
+  rawLogs        DeviceRawLog[]
+
+  @@index([companyId])
+  @@map("devices")
+}
+
+model PunchRecord {
+  id           String   @id @default(cuid())
+  deviceId     String
+  device       Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  devicePin    String
+  punchTime    DateTime
+  status       Int
+  verifyMode   Int
+  workCode     String?
+  reserved1    String?
+  reserved2    String?
+  rawLine      String
+
+  receivedAt   DateTime @default(now())
+
+  webhookDelivered   Boolean   @default(false)
+  webhookAttempts    Int       @default(0)
+  nextAttemptAt      DateTime  @default(now())
+  lastWebhookError   String?
+  webhookDeliveredAt DateTime?
+
+  deliveries   WebhookDelivery[]
+
+  @@unique([deviceId, devicePin, punchTime, status, verifyMode], name: "dedupe_key")
+  @@index([webhookDelivered, nextAttemptAt])
+  @@index([deviceId, punchTime])
+  @@map("punch_records")
+}
+
+model WebhookDelivery {
+  id            String   @id @default(cuid())
+  punchRecordId String
+  punchRecord   PunchRecord @relation(fields: [punchRecordId], references: [id], onDelete: Cascade)
+
+  url           String
+  attempt       Int
+  statusCode    Int?
+  responseBody  String?
+  delivered     Boolean
+  error         String?
+
+  createdAt     DateTime @default(now())
+
+  @@index([punchRecordId])
+  @@map("webhook_deliveries")
+}
+
+// Stub command queue for /iclock/getrequest + /iclock/devicecmd.
+model DeviceCommand {
+  id        String              @id @default(cuid())
+  deviceId  String
+  device    Device              @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  command   String
+  status    DeviceCommandStatus @default(PENDING)
+  response  String?
+  createdAt DateTime            @default(now())
+  sentAt    DateTime?
+  ackedAt   DateTime?
+
+  @@index([deviceId, status])
+  @@map("device_commands")
+}
+
+// Raw log of any /iclock/* request from an SN not (yet) registered as a Device,
+// so an admin can "claim" it into a company later.
+model UnregisteredDevicePing {
+  id           String   @id @default(cuid())
+  serialNumber String
+  endpoint     String
+  method       String
+  query        String?
+  rawBody      String?
+  createdAt    DateTime @default(now())
+
+  @@index([serialNumber])
+  @@map("unregistered_device_pings")
+}
+
+// Raw dump of any non-ATTLOG data a *registered* device pushes to
+// /iclock/cdata - OPERLOG, USERINFO, FINGERTMP, FACE, photos, or any other
+// table name a firmware variant sends. Punches (ATTLOG) still go through
+// PunchRecord; this is everything else, browsable per device for debugging
+// what a device is actually sending. Company-scoped in the admin API.
+model DeviceRawLog {
+  id        String   @id @default(cuid())
+  deviceId  String
+  device    Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  endpoint  String
+  method    String
+  table     String?
+  query     String?
+  headers   String?
+  rawBody   String?
+  createdAt DateTime @default(now())
+
+  @@index([deviceId, createdAt])
+  @@map("device_raw_logs")
+}
+
+// Unconditional firehose of *every* /iclock/* request (registered or not,
+// any table), for super-admin-only low-level debugging across the whole
+// platform. Deliberately not scoped to a company/device - it's the "what is
+// actually hitting this server" view. Overlaps with UnregisteredDevicePing
+// and DeviceRawLog by design (those are curated subsets of this).
+model RawRequestLog {
+  id           String   @id @default(cuid())
+  serialNumber String?
+  endpoint     String
+  method       String
+  query        String?
+  headers      String?
+  rawBody      String?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([serialNumber])
+  @@map("raw_request_logs")
+}
