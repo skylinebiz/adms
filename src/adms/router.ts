@@ -5,17 +5,22 @@ import { handleGetRequest } from "./getrequest";
 import { handleDeviceCmd } from "./devicecmd";
 import { handleTest } from "./test";
 import { logRawRequest } from "./rawLog";
+import { RESERVED_SLUG_VALUES } from "../utils/slug";
 
-// Path segments that must never be treated as a device secret, even though
-// the `/:secret/iclock` mount would otherwise accept any string here -
-// belt-and-suspenders on top of route registration order (which already
-// makes real collisions with /admin, /api/admin, /health unreachable, since
-// none of those have "iclock" as their second path segment).
-const RESERVED_SECRET_VALUES = new Set(["admin", "api", "health"]);
-
-export function clearReservedSecret(req: Request, _res: Response, next: NextFunction) {
-  if (req.params.secret && RESERVED_SECRET_VALUES.has(req.params.secret)) {
-    delete req.params.secret;
+// A company slug can never be one of these, even though the
+// `/:companySlug/:secret/iclock` mount would otherwise accept any string
+// here - belt-and-suspenders on top of the fact that a real Company can
+// never be created with a reserved slug in the first place (enforced by
+// slugSchema at signup/company-create time), and on top of route
+// registration order (which already makes real collisions with /admin,
+// /api/admin, /health unreachable, since none of those have "iclock" as
+// their third path segment). Stripping it here just means the request
+// falls back to "unresolved slug" behavior (null companyId on any
+// PendingDevice it creates) rather than accidentally scoping to a fake
+// company.
+export function clearReservedCompanySlug(req: Request, _res: Response, next: NextFunction) {
+  if (req.params.companySlug && RESERVED_SLUG_VALUES.has(req.params.companySlug)) {
+    delete req.params.companySlug;
   }
   next();
 }
@@ -24,10 +29,11 @@ export function clearReservedSecret(req: Request, _res: Response, next: NextFunc
 // ZKTeco firmware cannot do logins, custom headers, or CSRF tokens. Do not
 // mount any auth/session/CSRF middleware ahead of this router.
 //
-// mergeParams: true is required so req.params.secret (captured by the
-// parent /:secret/iclock mount in server.ts) is actually visible to the
-// routes below - without it, Express resets req.params for a mounted
-// Router() and the secret would silently look like it was never sent.
+// mergeParams: true is required so req.params.companySlug and
+// req.params.secret (captured by the parent /:companySlug/:secret/iclock
+// mount in server.ts) are actually visible to the routes below - without
+// it, Express resets req.params for a mounted Router() and both would
+// silently look like they were never sent.
 export const admsRouter = Router({ mergeParams: true });
 
 // ZKTeco payloads are plain tab-separated text, not JSON/urlencoded - parse

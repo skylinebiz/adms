@@ -152,6 +152,10 @@ const TIMEZONE_OPTIONS = buildTimezoneOptions();
 export default function DeviceDrawer({ deviceId, mode, companies, defaultCompanyId, onClose, onSaved }: Props) {
   const [device, setDevice] = useState<Device | null>(null);
   const [companyId, setCompanyId] = useState(defaultCompanyId ?? companies[0]?.id ?? "");
+  // Prefer the device's own joined company (edit mode, always accurate)
+  // over a lookup by the currently-selected companyId (create mode, or
+  // before the device has loaded) - both should normally agree.
+  const selectedCompanySlug = device?.company?.slug ?? companies.find((c) => c.id === companyId)?.slug ?? "";
   const [serialNumber, setSerialNumber] = useState("");
   const [label, setLabel] = useState("");
   const [webhookUrl, setWebhookUrl] = useState("");
@@ -372,7 +376,15 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
             {deviceSecret && (
               <div style={{ marginTop: 8 }}>
                 <label>Cloud Server URL</label>
-                <input readOnly value={`${window.location.origin}/${deviceSecret}`} onFocus={(e) => e.target.select()} />
+                <input
+                  readOnly
+                  value={
+                    selectedCompanySlug
+                      ? `${window.location.origin}/${selectedCompanySlug}/${deviceSecret}`
+                      : "(select a company to see the full URL)"
+                  }
+                  onFocus={(e) => e.target.select()}
+                />
               </div>
             )}
           </div>

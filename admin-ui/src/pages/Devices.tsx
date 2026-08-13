@@ -59,6 +59,20 @@ export default function Devices() {
       </div>
       {error && <div className="error-banner">{error}</div>}
 
+      {user?.role === "COMPANY_ADMIN" && companies[0] && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h3 style={{ marginTop: 0 }}>Connect a device</h3>
+          <p className="muted">
+            On the device: <strong>Menu → COMM → Cloud Server Setting</strong>. Set the server address to:
+          </p>
+          <code className="mono">{`${window.location.origin}/${companies[0].slug}/<any-secret-you-choose>`}</code>
+          <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
+            Pick any secret string - it becomes that device's secret automatically once you register it, or gets
+            captured the moment it first pings and you can claim it from <strong>Unregistered Devices</strong>.
+          </p>
+        </div>
+      )}
+
       <div className="card">
         {loading ? (
           <p className="muted">Loading…</p>
@@ -73,7 +87,6 @@ export default function Devices() {
                   {user?.role === "SUPER_ADMIN" && <th>Company</th>}
                   <th>Status</th>
                   <th>Last seen</th>
-                  <th>Secured</th>
                   <th>Webhook</th>
                   <th></th>
                 </tr>
@@ -91,17 +104,6 @@ export default function Devices() {
                     </td>
                     <td>
                       {d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : <span className="muted">never</span>}
-                    </td>
-                    <td>
-                      {d.deviceSecretSet ? (
-                        <span className="badge badge-delivered" title="Requests without the matching secret are rejected">
-                          secured
-                        </span>
-                      ) : (
-                        <span className="badge badge-offline" title="Open on the legacy URL - anyone who reaches the server can send data as this device">
-                          legacy
-                        </span>
-                      )}
                     </td>
                     <td>
                       {d.webhookUrlMasked ? (
@@ -135,7 +137,7 @@ export default function Devices() {
                 ))}
                 {devices.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="muted">
+                    <td colSpan={7} className="muted">
                       No devices registered yet.
                     </td>
                   </tr>

@@ -49,6 +49,35 @@ export function computeNextPendingSecret(
   return secretFromPath ?? null;
 }
 
+// Pure decision: what should a pending SN's stored company become after
+// this ping? Same first-write-wins shape as computeNextPendingSecret above,
+// extended to company attribution - once a company is on file for a
+// pending SN, it's never reassigned by a later ping (even one resolving to
+// a *different* company, or one that fails to resolve at all), so a
+// pending SN can't be squatted away from the company that first made
+// contact with it.
+export function computeNextPendingCompanyId(
+  existingCompanyId: string | null | undefined,
+  resolvedCompanyId: string | null
+): string | null {
+  if (existingCompanyId) return existingCompanyId;
+  return resolvedCompanyId;
+}
+
+// Resolves the URL's company-slug segment to a real Company.id, or null if
+// unresolvable (typo'd slug, stale bookmark, or a reserved word already
+// stripped upstream by clearReservedCompanySlug). Never throws.
+export async function resolveCompanyIdFromSlug(companySlug: string | undefined): Promise<string | null> {
+  if (!companySlug) return null;
+  try {
+    const company = await prisma.company.findUnique({ where: { slug: companySlug }, select: { id: true } });
+    return company?.id ?? null;
+  } catch (err) {
+    deviceLogger.error({ err, companySlug }, "failed to resolve company slug for pending device");
+    return null;
+  }
+}
+
 // Records a raw ping from an SN that isn't (yet) registered as a Device, so
 // an admin can later "claim" it into a company. Never throws - logging
 // failures must never break the device's response.
@@ -73,16 +102,21 @@ export async function logUnregisteredPing(req: Request, serialNumber: string, ra
 }
 
 // Upserts the PendingDevice summary row for a not-yet-claimed SN, applying
-// the adopt/no-adopt rule above. Never throws.
-async function upsertPendingDevice(serialNumber: string, secretFromPath: string | undefined) {
+// the adopt/no-adopt rules above for both secret and company. Never throws.
+async function upsertPendingDevice(
+  serialNumber: string,
+  secretFromPath: string | undefined,
+  resolvedCompanyId: string | null
+) {
   if (!serialNumber) return;
   try {
     const existing = await prisma.pendingDevice.findUnique({ where: { serialNumber } });
     const nextSecret = computeNextPendingSecret(existing?.secret, secretFromPath);
+    const nextCompanyId = computeNextPendingCompanyId(existing?.companyId, resolvedCompanyId);
     await prisma.pendingDevice.upsert({
       where: { serialNumber },
-      create: { serialNumber, secret: nextSecret },
-      update: { secret: nextSecret, lastSeenAt: new Date(), pingCount: { increment: 1 } },
+      create: { serialNumber, secret: nextSecret, companyId: nextCompanyId },
+      update: { secret: nextSecret, companyId: nextCompanyId, lastSeenAt: new Date(), pingCount: { increment: 1 } },
     });
   } catch (err) {
     deviceLogger.error({ err, serialNumber }, "failed to upsert pending device");
@@ -100,10 +134,12 @@ export interface DeviceResolution {
 // validates the request once a device is found:
 //
 //   - no Device row for this SN -> still-unregistered/pending. Captures the
-//     SN + whatever secret arrived (raw ping log + PendingDevice upsert)
-//     and always resolves as untrusted; callers must still ack `OK` for
-//     this case (unchanged "always ack OK" convention for the
-//     unregistered/pending flow).
+//     SN + whatever secret arrived, plus the company resolved from the
+//     URL's slug segment if any (raw ping log + PendingDevice upsert), and
+//     always resolves as untrusted; callers must still ack `OK` for this
+//     case (unchanged "always ack OK" convention for the
+//     unregistered/pending flow). The company slug never affects trust for
+//     an already-registered device below - only SN + per-device secret do.
 //   - Device found, deviceSecret null -> never secured, trusted.
 //   - Device found, deviceSecret set and matches the path secret -> trusted.
 //   - Device found, deviceSecret set and missing/mismatched -> NOT trusted.
@@ -127,7 +163,9 @@ export async function resolveDevice(req: Request, rawBody?: string): Promise<Dev
     return { device, trusted };
   }
 
+  const companySlug = req.params.companySlug as string | undefined;
+  const resolvedCompanyId = await resolveCompanyIdFromSlug(companySlug);
   await logUnregisteredPing(req, sn, rawBody);
-  await upsertPendingDevice(sn, secretFromPath);
+  await upsertPendingDevice(sn, secretFromPath, resolvedCompanyId);
   return { device: null, trusted: false };
 }

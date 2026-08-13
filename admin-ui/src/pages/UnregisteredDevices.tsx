@@ -1,14 +1,24 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, CompanyOption } from "../api";
+import { useAuth } from "../context/AuthContext";
 import { useSelection } from "../hooks/useSelection";
 import Pagination from "../components/Pagination";
 
 const PAGE_SIZE = 25;
 
+interface Ping {
+  serialNumber: string;
+  pingCount: number;
+  lastSeenAt: string;
+  secret: string | null;
+  companyId: string | null;
+  company: { id: string; name: string; slug: string } | null;
+}
+
 export default function UnregisteredDevices() {
-  const [pings, setPings] = useState<
-    { serialNumber: string; pingCount: number; lastSeenAt: string; secret: string | null }[]
-  >([]);
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === "SUPER_ADMIN";
+  const [pings, setPings] = useState<Ping[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
@@ -42,7 +52,12 @@ export default function UnregisteredDevices() {
   }, [page]);
 
   async function onClaim(serialNumber: string) {
-    const companyId = companyChoice[serialNumber];
+    // company_admin: implicitly their own company - self-service, no picker
+    // needed since the ping is already scoped to them. super_admin: the
+    // per-row picker, pre-filled with the ping's resolved company (if any).
+    const companyId = isSuperAdmin
+      ? companyChoice[serialNumber] ?? pings.find((p) => p.serialNumber === serialNumber)?.companyId
+      : user?.companyId;
     if (!companyId) {
       setError("Choose a company before claiming a device");
       return;
@@ -81,23 +96,27 @@ export default function UnregisteredDevices() {
     }
   }
 
+  const emptyStateColSpan = isSuperAdmin ? 8 : 5;
+
   return (
     <div>
       <h2>Unregistered Devices</h2>
       <p className="muted">
-        These serial numbers pinged /iclock/* but aren't assigned to a company yet. If one arrived via a secret-scoped
-        URL, that secret is captured here and carries straight into the device record when you claim it - nothing to
-        reconfigure on the device afterward. Claim one into a company to start capturing its punches, or delete it if
+        These serial numbers pinged /iclock/* but aren't registered as a device yet. If one arrived via your
+        company's URL, that secret is captured here and carries straight into the device record when you claim it -
+        nothing to reconfigure on the device afterward. Claim one to start capturing its punches, or delete it if
         it's just noise.
       </p>
       {error && <div className="error-banner">{error}</div>}
 
-      <div className="toolbar">
-        <div />
-        <button className="btn btn-danger" disabled={selected.size === 0} onClick={deleteSelected}>
-          Delete selected ({selected.size})
-        </button>
-      </div>
+      {isSuperAdmin && (
+        <div className="toolbar">
+          <div />
+          <button className="btn btn-danger" disabled={selected.size === 0} onClick={deleteSelected}>
+            Delete selected ({selected.size})
+          </button>
+        </div>
+      )}
 
       <div className="card">
         {loading ? (
@@ -108,31 +127,36 @@ export default function UnregisteredDevices() {
               <table>
                 <thead>
                   <tr>
-                    <th>
-                      <input
-                        type="checkbox"
-                        checked={pings.length > 0 && pings.every((p) => selected.has(p.serialNumber))}
-                        onChange={() => toggleAll(pings.map((p) => p.serialNumber))}
-                      />
-                    </th>
+                    {isSuperAdmin && (
+                      <th>
+                        <input
+                          type="checkbox"
+                          checked={pings.length > 0 && pings.every((p) => selected.has(p.serialNumber))}
+                          onChange={() => toggleAll(pings.map((p) => p.serialNumber))}
+                        />
+                      </th>
+                    )}
                     <th>Serial number</th>
                     <th>Secret</th>
+                    {isSuperAdmin && <th>Company</th>}
                     <th>Ping count</th>
                     <th>Last seen</th>
-                    <th>Claim into company</th>
+                    {isSuperAdmin && <th>Claim into company</th>}
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {pings.map((p) => (
                     <tr key={p.serialNumber}>
-                      <td>
-                        <input
-                          type="checkbox"
-                          checked={selected.has(p.serialNumber)}
-                          onChange={() => toggle(p.serialNumber)}
-                        />
-                      </td>
+                      {isSuperAdmin && (
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selected.has(p.serialNumber)}
+                            onChange={() => toggle(p.serialNumber)}
+                          />
+                        </td>
+                      )}
                       <td>
                         <code className="mono">{p.serialNumber}</code>
                       </td>
@@ -143,21 +167,34 @@ export default function UnregisteredDevices() {
                           <span className="muted">none (open path)</span>
                         )}
                       </td>
+                      {isSuperAdmin && (
+                        <td>
+                          {p.company ? (
+                            p.company.name
+                          ) : (
+                            <span className="muted" title="Legacy /iclock ping or an unresolved company URL">
+                              unscoped
+                            </span>
+                          )}
+                        </td>
+                      )}
                       <td>{p.pingCount}</td>
                       <td>{new Date(p.lastSeenAt).toLocaleString()}</td>
-                      <td>
-                        <select
-                          value={companyChoice[p.serialNumber] ?? ""}
-                          onChange={(e) => setCompanyChoice((s) => ({ ...s, [p.serialNumber]: e.target.value }))}
-                        >
-                          <option value="">Select company…</option>
-                          {companies.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
+                      {isSuperAdmin && (
+                        <td>
+                          <select
+                            value={companyChoice[p.serialNumber] ?? p.companyId ?? ""}
+                            onChange={(e) => setCompanyChoice((s) => ({ ...s, [p.serialNumber]: e.target.value }))}
+                          >
+                            <option value="">Select company…</option>
+                            {companies.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      )}
                       <td style={{ display: "flex", gap: 6 }}>
                         <button
                           className="btn btn-sm btn-primary"
@@ -166,15 +203,17 @@ export default function UnregisteredDevices() {
                         >
                           Claim
                         </button>
-                        <button className="btn btn-sm btn-danger" onClick={() => deleteOne(p.serialNumber)}>
-                          Delete
-                        </button>
+                        {isSuperAdmin && (
+                          <button className="btn btn-sm btn-danger" onClick={() => deleteOne(p.serialNumber)}>
+                            Delete
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
                   {pings.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="muted">
+                      <td colSpan={emptyStateColSpan} className="muted">
                         No unregistered pings recorded.
                       </td>
                     </tr>

@@ -28,11 +28,18 @@ enum DeviceCommandStatus {
 model Company {
   id        String   @id @default(cuid())
   name      String
+  // URL-safe, globally unique slug chosen at signup (or by a super_admin
+  // creating a company manually) - the first path segment of every device
+  // under this company's Cloud Server URL: /<slug>/<deviceSecret>/iclock/...
+  // and the company scope a pending device's first-contact ping resolves
+  // to. See src/utils/slug.ts for format/reserved-word rules.
+  slug      String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  adminUsers AdminUser[]
-  devices    Device[]
+  adminUsers     AdminUser[]
+  devices        Device[]
+  pendingDevices PendingDevice[]
 
   @@map("companies")
 }
@@ -210,10 +217,20 @@ model PendingDevice {
   id           String   @id @default(cuid())
   serialNumber String   @unique
   secret       String?
+  // Company resolved from the URL's slug segment at first-contact time
+  // (see resolveCompanyIdFromSlug/upsertPendingDevice in deviceLookup.ts).
+  // Null covers legacy /iclock pings and unresolved/typo'd slugs - those
+  // stay in the global/unscoped bucket, visible only to super_admin. Once
+  // set, never reassigned by a later ping - same first-write-wins rule as
+  // `secret`, so a pending SN can't be squatted away from the company that
+  // first made contact with it.
+  companyId    String?
+  company      Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
   firstSeenAt  DateTime @default(now())
   lastSeenAt   DateTime @default(now())
   pingCount    Int      @default(1)
 
+  @@index([companyId])
   @@map("pending_devices")
 }
 

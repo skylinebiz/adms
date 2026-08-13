@@ -75,10 +75,9 @@ function toDeviceListItem(device: {
     ...device,
     webhookUrlMasked: maskWebhookUrl(device.webhookUrl),
     webhookUrl: undefined,
-    // Neither secret belongs in a list payload - only presence, not value.
+    // Neither secret belongs in a list payload - only the full value.
     // (webhookSecret used to leak here in full; deviceSecret never should.)
     webhookSecret: undefined,
-    deviceSecretSet: device.deviceSecret !== null,
     deviceSecret: undefined,
   };
 }
@@ -92,13 +91,15 @@ function toDeviceListItem(device: {
 // request - real DB-level pagination instead of fetch-all-and-slice.
 // Includes each SN's captured secret (if any), which claiming below
 // carries straight into the new Device record.
+//
+// Company-scoped self-service: a company_admin now sees (and can claim)
+// pending devices already attributed to their own company - the ping's URL
+// carried their company's slug, so resolveDevice already knows it's
+// theirs. The unscoped bucket (a typo'd/unresolved slug -
+// PendingDevice.companyId null) isn't attributable to any one company, so
+// it stays super_admin-only: resolveCompanyScope forces a company_admin's
+// query to their own companyId, which a `null` row can never match.
 devicesRouter.get("/unregistered-pings", async (req, res) => {
-  if (req.adminUser!.role !== "SUPER_ADMIN") {
-    // Unregistered pings have no company yet - only super_admin can triage them.
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
-
   const parsedQuery = paginationQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
     res.status(400).json({ error: "Invalid query", details: parsedQuery.error.flatten() });
@@ -106,13 +107,18 @@ devicesRouter.get("/unregistered-pings", async (req, res) => {
   }
   const { page, pageSize } = parsedQuery.data;
 
+  const companyId = resolveCompanyScope(req, req.query.companyId as string | undefined);
+  const where = companyId ? { companyId } : undefined;
+
   const [pending, total] = await Promise.all([
     prisma.pendingDevice.findMany({
+      where,
       orderBy: { lastSeenAt: "desc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
+      include: { company: { select: { id: true, name: true, slug: true } } },
     }),
-    prisma.pendingDevice.count(),
+    prisma.pendingDevice.count({ where }),
   ]);
 
   res.json({
@@ -121,6 +127,8 @@ devicesRouter.get("/unregistered-pings", async (req, res) => {
       pingCount: p.pingCount,
       lastSeenAt: p.lastSeenAt,
       secret: p.secret,
+      companyId: p.companyId,
+      company: p.company,
     })),
     total,
     page,
@@ -196,6 +204,23 @@ devicesRouter.post("/claim", async (req, res) => {
     where: { serialNumber: parsed.data.serialNumber },
   });
 
+  // The check above only validates the *target* company in the request
+  // body - it doesn't stop a company_admin from claiming a pending SN
+  // that's already attributed to a *different* company (self-signup means
+  // this is no longer just trusted super_admins guessing at SNs). A
+  // pending row with no company yet (an unresolved slug) stays claimable
+  // the same way it always has - only an already-attributed mismatch is
+  // blocked. super_admin is exempt, same as every other company-scoping
+  // check in this file.
+  if (
+    req.adminUser!.role !== "SUPER_ADMIN" &&
+    pending?.companyId &&
+    pending.companyId !== parsed.data.companyId
+  ) {
+    res.status(403).json({ error: "This device belongs to a different company" });
+    return;
+  }
+
   const device = await prisma
     .$transaction(async (tx) => {
       const created = await tx.device.create({
@@ -242,7 +267,7 @@ devicesRouter.get("/", async (req, res) => {
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
-      include: { company: { select: { id: true, name: true } } },
+      include: { company: { select: { id: true, name: true, slug: true } } },
     }),
     prisma.device.count({ where }),
   ]);

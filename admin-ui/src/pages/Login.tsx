@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../api";
 
@@ -43,6 +43,9 @@ export default function Login() {
         <button className="btn btn-primary" type="submit" disabled={submitting} style={{ width: "100%" }}>
           {submitting ? "Signing in…" : "Sign in"}
         </button>
+        <p className="muted" style={{ marginTop: 12, textAlign: "center" }}>
+          New here? <Link to="/signup">Create a company</Link>
+        </p>
       </form>
     </div>
   );

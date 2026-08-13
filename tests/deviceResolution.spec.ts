@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeNextPendingSecret, isDeviceRequestTrusted } from "../src/adms/deviceLookup";
+import { computeNextPendingCompanyId, computeNextPendingSecret, isDeviceRequestTrusted } from "../src/adms/deviceLookup";
 
 describe("isDeviceRequestTrusted", () => {
   it("trusts any request (even with no secret) when the device was never secured", () => {
@@ -49,5 +49,32 @@ describe("computeNextPendingSecret", () => {
 
   it("never overwrites an existing secret even if the later ping has none", () => {
     expect(computeNextPendingSecret("known-secret", undefined)).toBe("known-secret");
+  });
+});
+
+describe("computeNextPendingCompanyId", () => {
+  it("adopts the resolved company on first sighting (no prior row)", () => {
+    expect(computeNextPendingCompanyId(undefined, "company-1")).toBe("company-1");
+  });
+
+  it("adopts a company when the prior row exists but has none yet", () => {
+    expect(computeNextPendingCompanyId(null, "company-1")).toBe("company-1");
+  });
+
+  it("stays null when no slug has ever resolved", () => {
+    expect(computeNextPendingCompanyId(undefined, null)).toBeNull();
+    expect(computeNextPendingCompanyId(null, null)).toBeNull();
+  });
+
+  it("keeps the existing company when a later ping resolves the same one", () => {
+    expect(computeNextPendingCompanyId("company-1", "company-1")).toBe("company-1");
+  });
+
+  it("never reassigns an existing company to a different resolved one", () => {
+    expect(computeNextPendingCompanyId("company-1", "company-2")).toBe("company-1");
+  });
+
+  it("never clears an existing company even if a later ping is unresolved", () => {
+    expect(computeNextPendingCompanyId("company-1", null)).toBe("company-1");
   });
 });

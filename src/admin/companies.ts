@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db/client";
 import { requireSuperAdmin } from "../middleware/requireAdminAuth";
 import { OPTIONS_LIMIT, paginationQuerySchema } from "../utils/pagination";
+import { slugSchema } from "../utils/slug";
 
 export const companiesRouter = Router();
 
@@ -11,7 +12,10 @@ export const companiesRouter = Router();
 companiesRouter.get("/options", async (req, res) => {
   if (req.adminUser!.role !== "SUPER_ADMIN") {
     const company = req.adminUser!.companyId
-      ? await prisma.company.findUnique({ where: { id: req.adminUser!.companyId }, select: { id: true, name: true } })
+      ? await prisma.company.findUnique({
+          where: { id: req.adminUser!.companyId },
+          select: { id: true, name: true, slug: true },
+        })
       : null;
     res.json({ companies: company ? [company] : [] });
     return;
@@ -19,7 +23,7 @@ companiesRouter.get("/options", async (req, res) => {
   const companies = await prisma.company.findMany({
     orderBy: { name: "asc" },
     take: OPTIONS_LIMIT,
-    select: { id: true, name: true },
+    select: { id: true, name: true, slug: true },
   });
   res.json({ companies });
 });
@@ -73,7 +77,7 @@ companiesRouter.get("/:id", async (req, res) => {
   res.json({ company });
 });
 
-const createCompanySchema = z.object({ name: z.string().min(1) });
+const createCompanySchema = z.object({ name: z.string().min(1), slug: slugSchema });
 
 companiesRouter.post("/", requireSuperAdmin, async (req, res) => {
   const parsed = createCompanySchema.safeParse(req.body);
@@ -81,11 +85,20 @@ companiesRouter.post("/", requireSuperAdmin, async (req, res) => {
     res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
     return;
   }
-  const company = await prisma.company.create({ data: { name: parsed.data.name } });
+  const company = await prisma.company
+    .create({ data: { name: parsed.data.name, slug: parsed.data.slug } })
+    .catch((err) => {
+      if (err?.code === "P2002") return "conflict" as const;
+      throw err;
+    });
+  if (company === "conflict") {
+    res.status(409).json({ error: "A company with this slug already exists" });
+    return;
+  }
   res.status(201).json({ company });
 });
 
-const updateCompanySchema = z.object({ name: z.string().min(1) });
+const updateCompanySchema = z.object({ name: z.string().min(1), slug: slugSchema.optional() });
 
 companiesRouter.patch("/:id", requireSuperAdmin, async (req, res) => {
   const parsed = updateCompanySchema.safeParse(req.body);
@@ -94,8 +107,15 @@ companiesRouter.patch("/:id", requireSuperAdmin, async (req, res) => {
     return;
   }
   const company = await prisma.company
-    .update({ where: { id: req.params.id }, data: { name: parsed.data.name } })
-    .catch(() => null);
+    .update({ where: { id: req.params.id }, data: parsed.data })
+    .catch((err) => {
+      if (err?.code === "P2002") return "conflict" as const;
+      return null;
+    });
+  if (company === "conflict") {
+    res.status(409).json({ error: "A company with this slug already exists" });
+    return;
+  }
   if (!company) {
     res.status(404).json({ error: "Not found" });
     return;

@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, ApiError, Company } from "../api";
 import { useAuth } from "../context/AuthContext";
+import { slugify } from "../utils/slug";
 import Pagination from "../components/Pagination";
 
 const PAGE_SIZE = 25;
@@ -13,7 +14,14 @@ export default function Companies() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
+  const [newSlug, setNewSlug] = useState("");
+  const [slugTouched, setSlugTouched] = useState(false);
   const [creating, setCreating] = useState(false);
+
+  function onNewNameChange(value: string) {
+    setNewName(value);
+    if (!slugTouched) setNewSlug(slugify(value));
+  }
 
   async function load() {
     setLoading(true);
@@ -38,8 +46,10 @@ export default function Companies() {
     setCreating(true);
     setError(null);
     try {
-      await api.createCompany(newName);
+      await api.createCompany({ name: newName, slug: newSlug });
       setNewName("");
+      setNewSlug("");
+      setSlugTouched(false);
       setPage(1);
       await load();
     } catch (err) {
@@ -70,7 +80,21 @@ export default function Companies() {
           <form onSubmit={onCreate} className="form-row" style={{ alignItems: "flex-end" }}>
             <div className="field">
               <label>Name</label>
-              <input value={newName} onChange={(e) => setNewName(e.target.value)} required />
+              <input value={newName} onChange={(e) => onNewNameChange(e.target.value)} required />
+            </div>
+            <div className="field">
+              <label>Slug</label>
+              <input
+                value={newSlug}
+                onChange={(e) => {
+                  setNewSlug(slugify(e.target.value));
+                  setSlugTouched(true);
+                }}
+                pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                minLength={3}
+                maxLength={63}
+                required
+              />
             </div>
             <button className="btn btn-primary" type="submit" disabled={creating}>
               {creating ? "Creating…" : "Create company"}
@@ -89,6 +113,7 @@ export default function Companies() {
                 <thead>
                   <tr>
                     <th>Name</th>
+                    <th>Slug</th>
                     <th>Devices</th>
                     <th>Admin users</th>
                     <th>Created</th>
@@ -99,6 +124,9 @@ export default function Companies() {
                   {companies.map((c) => (
                     <tr key={c.id}>
                       <td>{c.name}</td>
+                      <td>
+                        <code className="mono">{c.slug}</code>
+                      </td>
                       <td>{c._count?.devices ?? "-"}</td>
                       <td>{c._count?.adminUsers ?? "-"}</td>
                       <td>{new Date(c.createdAt).toLocaleString()}</td>
@@ -113,7 +141,7 @@ export default function Companies() {
                   ))}
                   {companies.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="muted">
+                      <td colSpan={6} className="muted">
                         No companies yet.
                       </td>
                     </tr>

@@ -61,6 +61,7 @@ export interface AdminUserSummary {
 export interface Company {
   id: string;
   name: string;
+  slug: string;
   createdAt: string;
   updatedAt: string;
   _count?: { devices: number; adminUsers: number };
@@ -69,6 +70,7 @@ export interface Company {
 export interface CompanyOption {
   id: string;
   name: string;
+  slug: string;
 }
 
 export interface Device {
@@ -85,10 +87,9 @@ export interface Device {
   webhookHeaders?: Record<string, string> | null;
   webhookBodyTemplate?: unknown | null;
   deviceSecret?: string | null;
-  deviceSecretSet?: boolean;
   timezone?: string | null;
   createdAt: string;
-  company?: { id: string; name: string };
+  company?: { id: string; name: string; slug: string };
 }
 
 export interface DeviceOption {
@@ -167,6 +168,8 @@ export interface WebhookDelivery {
 
 export const api = {
   login: (email: string, password: string) => post<{ user: AdminUserSummary }>("/auth/login", { email, password }),
+  signup: (data: { companyName: string; slug: string; email: string; password: string }) =>
+    post<{ user: AdminUserSummary }>("/auth/signup", data),
   logout: () => post<{ ok: true }>("/auth/logout"),
   me: () => get<{ user: AdminUserSummary }>("/auth/me"),
   changePassword: (currentPassword: string, newPassword: string) =>
@@ -177,8 +180,9 @@ export const api = {
       `/companies${buildQuery({ page: params.page, pageSize: params.pageSize })}`
     ),
   listCompanyOptions: () => get<{ companies: CompanyOption[] }>("/companies/options"),
-  createCompany: (name: string) => post<{ company: Company }>("/companies", { name }),
-  updateCompany: (id: string, name: string) => patch<{ company: Company }>(`/companies/${id}`, { name }),
+  createCompany: (data: { name: string; slug: string }) => post<{ company: Company }>("/companies", data),
+  updateCompany: (id: string, data: Partial<{ name: string; slug: string }>) =>
+    patch<{ company: Company }>(`/companies/${id}`, data),
   deleteCompany: (id: string) => del<{ ok: true }>(`/companies/${id}`),
 
   listAdminUsers: (params: { companyId?: string } & PageParams = {}) =>
@@ -236,8 +240,16 @@ export const api = {
   ) => post<TestWebhookResult>(`/devices/${id}/test-webhook`, overrides),
   listUnregisteredPings: (params: PageParams = {}) =>
     get<
-      { pings: { serialNumber: string; pingCount: number; lastSeenAt: string; secret: string | null }[] } &
-        Paginated<unknown>
+      {
+        pings: {
+          serialNumber: string;
+          pingCount: number;
+          lastSeenAt: string;
+          secret: string | null;
+          companyId: string | null;
+          company: { id: string; name: string; slug: string } | null;
+        }[];
+      } & Paginated<unknown>
     >(`/devices/unregistered-pings${buildQuery({ page: params.page, pageSize: params.pageSize })}`),
   claimDevice: (data: { serialNumber: string; companyId: string; label?: string }) =>
     post<{ device: Device }>("/devices/claim", data),
