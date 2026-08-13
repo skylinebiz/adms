@@ -102,6 +102,12 @@ function listTimeZones(): string[] {
 // only to sort/label the picker - approximate for DST zones (based on
 // today's date), not the ingestion-time conversion logic.
 function currentOffsetMinutes(tz: string): number {
+  // Both the formatting and the subtraction below must read the same
+  // instant, at the same (seconds-included) precision - formatting to
+  // minute precision while subtracting a full-precision Date.now() loses
+  // up to 59s, which Math.round then silently rounds down to the wrong
+  // minute (e.g. Kolkata's exact +05:30 showing as +05:29).
+  const now = new Date();
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: tz,
     hourCycle: "h23",
@@ -110,10 +116,11 @@ function currentOffsetMinutes(tz: string): number {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-  }).formatToParts(new Date());
+    second: "2-digit",
+  }).formatToParts(now);
   const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? "0");
-  const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"));
-  return Math.round((asUtc - Date.now()) / 60000);
+  const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
+  return Math.round((asUtc - now.getTime()) / 60000);
 }
 
 function formatOffset(minutes: number): string {
