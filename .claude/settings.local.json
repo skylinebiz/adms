@@ -62,7 +62,15 @@
       "Bash(node -e \"const bcrypt=require\\('bcrypt'\\); bcrypt.hash\\('E2ETestPass123', 12\\).then\\(h=>console.log\\(h\\)\\)\")",
       "Bash(curl -s -c /tmp/cookies.txt -X POST http://localhost:8080/api/admin/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"admin@example.com\",\"password\":\"E2ETestPass123\"}' -w '\\\\nHTTP:%{http_code}\\\\n')",
       "Bash(curl -s -b /tmp/cookies.txt http://localhost:8080/api/admin/companies/options -w \"\\\\nHTTP:%{http_code}\\\\n\")",
-      "Bash(curl -s -b /tmp/cookies.txt -X POST http://localhost:8080/api/admin/devices/claim -H 'Content-Type: application/json' -d '{\"serialNumber\":\"E2E_TEST_SN\",\"companyId\":\"cmspz1ioa0002sxh5xqywdwe2\"}' -w '\\\\nHTTP:%{http_code}\\\\n')"
+      "Bash(curl -s -b /tmp/cookies.txt -X POST http://localhost:8080/api/admin/devices/claim -H 'Content-Type: application/json' -d '{\"serialNumber\":\"E2E_TEST_SN\",\"companyId\":\"cmspz1ioa0002sxh5xqywdwe2\"}' -w '\\\\nHTTP:%{http_code}\\\\n')",
+      "Bash(curl -s -c /tmp/cookies2.txt -X POST http://localhost:8080/api/admin/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"admin@example.com\",\"password\":\"E2ETestPass123\"}' -w '\\\\nHTTP:%{http_code}\\\\n')",
+      "Bash(curl -s -b /tmp/cookies2.txt http://localhost:8080/api/admin/companies/options)",
+      "Bash(curl -s -b /tmp/cookies2.txt -X POST http://localhost:8080/api/admin/devices -H 'Content-Type: application/json' -d '{\"serialNumber\":\"E2E_TZ_SN\",\"companyId\":\"cmspz1ioa0002sxh5xqywdwe2\",\"timezone\":\"Asia/Kolkata\"}' -w '\\\\nHTTP:%{http_code}\\\\n')",
+      "Bash(curl -s -b /tmp/cookies2.txt -X POST http://localhost:8080/api/admin/devices -H 'Content-Type: application/json' -d '{\"serialNumber\":\"E2E_TZ_BAD\",\"companyId\":\"cmspz1ioa0002sxh5xqywdwe2\",\"timezone\":\"Not/AZone\"}' -w '\\\\nHTTP:%{http_code}\\\\n')",
+      "Bash(curl -s -b /tmp/cookies2.txt \"http://localhost:8080/api/admin/punch-records?deviceId=cmsqyg2x9000114a19y1g21u3\")",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\(JSON.stringify\\(j.records[0],null,2\\)\\)}\\)\")",
+      "Bash(curl -s -b /tmp/cookies2.txt -X POST http://localhost:8080/api/admin/devices/cmsqyg2x9000114a19y1g21u3/test-webhook -H 'Content-Type: application/json' -d '{\"url\":\"https://httpbin.org/post\"}' -w '\\\\nHTTP:%{http_code}\\\\n')",
+      "Bash(docker compose exec -T postgres psql -U adms -d adms -c ' *)"
     ]
   }
 }

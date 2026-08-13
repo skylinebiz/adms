@@ -5,6 +5,7 @@ import { deviceLogger } from "../logger";
 import { resolveDevice, sendRejected, touchDevice } from "./deviceLookup";
 import { parseAttlogBody } from "./parsers/attlog";
 import { logDeviceRawData } from "./rawLog";
+import { zonedWallClockToUtc } from "./timezone";
 
 const OK = "OK";
 
@@ -47,7 +48,7 @@ export async function handleCdataGet(req: Request, res: Response) {
   sendPlainText(res, buildOptionsResponse());
 }
 
-async function storeAttlog(deviceId: string, hasWebhook: boolean, body: string) {
+async function storeAttlog(deviceId: string, hasWebhook: boolean, timezone: string | null, body: string) {
   const { records, errors } = parseAttlogBody(body);
 
   for (const err of errors) {
@@ -59,11 +60,15 @@ async function storeAttlog(deviceId: string, hasWebhook: boolean, body: string) 
 
   for (const record of records) {
     try {
+      // Only computable when the device has a configured timezone - never
+      // guessed, never backfilled after the fact if one gets set later.
+      const punchTimeUtc = timezone ? zonedWallClockToUtc(record.punchTime, timezone) : null;
       await prisma.punchRecord.create({
         data: {
           deviceId,
           devicePin: record.pin,
           punchTime: record.punchTime,
+          punchTimeUtc,
           status: record.status,
           verifyMode: record.verifyMode,
           workCode: record.workCode,
@@ -120,7 +125,7 @@ export async function handleCdataPost(req: Request, res: Response) {
   try {
     if (table === "ATTLOG") {
       const hasWebhook = Boolean(device.webhookEnabled && device.webhookUrl);
-      await storeAttlog(device.id, hasWebhook, body);
+      await storeAttlog(device.id, hasWebhook, device.timezone, body);
     } else {
       // OPERLOG / USERINFO / FINGERTMP / FACE / photos / anything else -
       // captured verbatim so it's browsable per-device in the admin panel's

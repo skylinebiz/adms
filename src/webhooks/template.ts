@@ -11,6 +11,19 @@ export interface PunchTemplateVars {
   pin: string;
   punch_time: string;
   punch_time_unix: number;
+  // The real UTC instant, computed from the device's wall-clock digits via
+  // its configured timezone (see src/adms/timezone.ts). Unlike punch_time
+  // (which is the device's literal digits mislabeled as UTC - see
+  // parseDeviceDatetime), this one is an unambiguous, genuinely-UTC ISO8601
+  // instant - the "bulletproof" value for downstream systems. Null when the
+  // device had no timezone configured at ingestion time, so a receiver can
+  // tell "unknown" apart from a real midnight-UTC value instead of silently
+  // getting something wrong.
+  punch_time_utc: string | null;
+  // The device's configured IANA timezone name (e.g. "Asia/Kolkata"), or
+  // null if unset. Lets a receiver display punch_time_utc back in the
+  // device's own local time without having to know it out of band.
+  device_timezone: string | null;
   status: number;
   verify_mode: number;
   work_code: string | null;
@@ -25,6 +38,8 @@ export const PLACEHOLDER_NAMES: (keyof PunchTemplateVars)[] = [
   "pin",
   "punch_time",
   "punch_time_unix",
+  "punch_time_utc",
+  "device_timezone",
   "status",
   "verify_mode",
   "work_code",
@@ -85,6 +100,8 @@ export const SAMPLE_TEMPLATE_VARS: PunchTemplateVars = {
   pin: "1",
   punch_time: "2024-07-28T01:25:24.000Z",
   punch_time_unix: 1722130524,
+  punch_time_utc: "2024-07-27T19:55:24.000Z",
+  device_timezone: "Asia/Kolkata",
   status: 0,
   verify_mode: 1,
   work_code: null,

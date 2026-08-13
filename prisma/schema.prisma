@@ -67,6 +67,17 @@ model Device {
   // this only validates the request against the SN it claims. null means
   // "never secured" and stays fully open on the legacy plain /iclock path.
   deviceSecret        String?
+
+  // IANA timezone name (e.g. "Asia/Kolkata") the device's own clock is set
+  // to. Devices push wall-clock digits with no timezone info of their own
+  // (see parseDeviceDatetime in src/adms/parsers/attlog.ts) - this is what
+  // lets the server work out the real UTC instant behind those digits.
+  // Nullable and opt-in: null (the default) means "unknown", and every
+  // existing punch-time behavior is completely unchanged. Setting it only
+  // affects punches ingested afterward - PunchRecord.punchTimeUtc is never
+  // retroactively backfilled for older rows.
+  timezone            String?
+
   webhookUrl          String?
   webhookSecret       String?
   webhookEnabled      Boolean  @default(false)
@@ -99,7 +110,17 @@ model PunchRecord {
   device       Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 
   devicePin    String
+  // The device's literal wall-clock digits, stamped as UTC (NOT a real UTC
+  // instant - see parseDeviceDatetime). Unchanged from day one: still the
+  // dedupe key, still what the admin UI shows as "exactly what the device's
+  // clock reported."
   punchTime    DateTime
+  // The actual UTC instant, computed from punchTime's digits via the
+  // device's configured timezone at ingestion time (see zonedWallClockToUtc
+  // in src/adms/timezone.ts). Null when the device had no timezone
+  // configured yet at the moment this punch arrived - never backfilled
+  // later, so a null here just means "not knowable," not "midnight UTC."
+  punchTimeUtc DateTime?
   status       Int
   verifyMode   Int
   workCode     String?

@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { api, ApiError, DeviceOption, PunchRecord } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useSelection } from "../hooks/useSelection";
-import { formatPunchTime } from "../utils/formatTime";
+import { formatAccurateTime, formatPunchTime } from "../utils/formatTime";
 import { webhookStatusLabel } from "../utils/webhookStatus";
 import DeliveryLogDrawer from "./DeliveryLogDrawer";
 import Pagination from "./Pagination";
@@ -169,6 +169,9 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
                   <th title="Shown exactly as the device's own clock reported it, not converted to your timezone">
                     Punch time
                   </th>
+                  <th title="The real UTC instant, computed from the device's configured timezone - shown in your local time. Blank if the device has no timezone configured.">
+                    Accurate time
+                  </th>
                   <th>Verify mode</th>
                   <th>Webhook status</th>
                   <th>Attempts</th>
@@ -187,6 +190,7 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
                     <td>{r.devicePin}</td>
                     <td>{r.device?.label ?? r.device?.serialNumber}</td>
                     <td>{formatPunchTime(r.punchTime)}</td>
+                    <td>{formatAccurateTime(r.punchTimeUtc)}</td>
                     <td>{r.verifyMode}</td>
                     <td>
                       <span className={`badge badge-${r.webhookStatus}`}>{webhookStatusLabel(r.webhookStatus)}</span>
@@ -216,7 +220,7 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
                 ))}
                 {records.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="muted">
+                    <td colSpan={10} className="muted">
                       No punch records found.
                     </td>
                   </tr>

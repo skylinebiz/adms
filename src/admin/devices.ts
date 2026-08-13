@@ -8,6 +8,7 @@ import { requireSuperAdmin, resolveCompanyScope } from "../middleware/requireAdm
 import { dispatchWebhook, renderPunchWebhookBody } from "../webhooks/dispatcher";
 import { renderHeaders, SAMPLE_TEMPLATE_VARS } from "../webhooks/template";
 import { OPTIONS_LIMIT, paginationQuerySchema } from "../utils/pagination";
+import { isValidTimeZone } from "../adms/timezone";
 
 export const devicesRouter = Router();
 
@@ -41,6 +42,11 @@ const bodyTemplateSchema = z
     { message: "Body template must be valid JSON" }
   );
 
+const timezoneSchema = z
+  .string()
+  .min(1)
+  .refine(isValidTimeZone, { message: 'Not a recognized IANA timezone name (e.g. "Asia/Kolkata")' });
+
 function maskWebhookUrl(url: string | null): string | null {
   if (!url) return null;
   try {
@@ -62,6 +68,7 @@ function toDeviceListItem(device: {
   webhookSecret: string | null;
   webhookEnabled: boolean;
   deviceSecret: string | null;
+  timezone: string | null;
   createdAt: Date;
 }) {
   return {
@@ -267,6 +274,9 @@ const createSchema = z.object({
   // admin plans to put in the device's own Cloud Server URL - they own the
   // value, we just store and compare it. Left blank = open/legacy for now.
   deviceSecret: z.string().min(1).optional(),
+  // IANA name the device's clock is set to, e.g. "Asia/Kolkata". Left unset
+  // = unknown, punches keep today's literal-digit behavior indefinitely.
+  timezone: timezoneSchema.optional(),
   webhookUrl: z.string().url().optional(),
   webhookEnabled: z.boolean().optional(),
   webhookHeaders: headersSchema,
@@ -310,6 +320,7 @@ const updateSchema = z.object({
   // Direct edit (view/copy/overwrite/clear), unlike webhookSecret which
   // only supports regenerate - the admin owns this value, not us.
   deviceSecret: z.string().min(1).nullable().optional(),
+  timezone: timezoneSchema.nullable().optional(),
   webhookUrl: z.string().url().nullable().optional(),
   webhookEnabled: z.boolean().optional(),
   webhookHeaders: headersSchema,

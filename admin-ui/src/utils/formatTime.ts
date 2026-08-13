@@ -9,3 +9,12 @@
 export function formatPunchTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { timeZone: "UTC" });
 }
+
+// punchTimeUtc is a real UTC instant (only present once a device has a
+// configured timezone - see Device.timezone) - format it in the viewer's
+// own local timezone, unlike formatPunchTime above which deliberately does
+// not.
+export function formatAccurateTime(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString();
+}

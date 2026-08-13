@@ -9,6 +9,8 @@ export interface PunchWebhookPayload {
   device_serial: string;
   pin: string;
   punch_time: string;
+  punch_time_utc: string | null;
+  device_timezone: string | null;
   status: number;
   verify_mode: number;
   work_code: string | null;
@@ -16,14 +18,16 @@ export interface PunchWebhookPayload {
 }
 
 export function buildTemplateVars(
-  punch: PunchRecord,
-  device: Pick<Device, "id" | "companyId" | "serialNumber">,
+  punch: Pick<PunchRecord, "devicePin" | "punchTime" | "punchTimeUtc" | "status" | "verifyMode" | "workCode" | "receivedAt">,
+  device: Pick<Device, "id" | "companyId" | "serialNumber" | "timezone">,
   companyName: string
 ): PunchTemplateVars {
   return {
     pin: punch.devicePin,
     punch_time: punch.punchTime.toISOString(),
     punch_time_unix: Math.floor(punch.punchTime.getTime() / 1000),
+    punch_time_utc: punch.punchTimeUtc ? punch.punchTimeUtc.toISOString() : null,
+    device_timezone: device.timezone ?? null,
     status: punch.status,
     verify_mode: punch.verifyMode,
     work_code: punch.workCode,
@@ -44,6 +48,8 @@ export function buildDefaultPayload(vars: PunchTemplateVars): PunchWebhookPayloa
     device_serial: vars.device_serial,
     pin: vars.pin,
     punch_time: vars.punch_time,
+    punch_time_utc: vars.punch_time_utc,
+    device_timezone: vars.device_timezone,
     status: vars.status,
     verify_mode: vars.verify_mode,
     work_code: vars.work_code,
@@ -129,7 +135,7 @@ export async function dispatchWebhook(
 // template/headers (or the default shape) and dispatches it.
 export async function dispatchPunchWebhook(
   punch: PunchRecord,
-  device: Pick<Device, "id" | "companyId" | "serialNumber" | "webhookUrl" | "webhookSecret" | "webhookHeaders" | "webhookBodyTemplate">,
+  device: Pick<Device, "id" | "companyId" | "serialNumber" | "timezone" | "webhookUrl" | "webhookSecret" | "webhookHeaders" | "webhookBodyTemplate">,
   companyName: string,
   timeoutMs: number
 ): Promise<WebhookDispatchResult> {

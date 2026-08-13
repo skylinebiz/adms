@@ -257,6 +257,8 @@ POSTed as JSON to that URL:
   "device_serial": "BOCK200961014",
   "pin": "1",
   "punch_time": "2024-07-28T01:25:24.000Z",
+  "punch_time_utc": "2024-07-27T19:55:24.000Z",
+  "device_timezone": "Asia/Kolkata",
   "status": 0,
   "verify_mode": 1,
   "work_code": null,
@@ -275,6 +277,14 @@ don't let your JSON/date library "helpfully" convert it) — the admin
 panel's Punch Records / Failed Webhooks / delivery-log views do exactly
 this (render in forced UTC) so the displayed time always matches what the
 device's own clock showed, regardless of the admin's browser timezone.
+
+**`punch_time_utc` is the fix for that ambiguity** — see [Device timezone
+and accurate UTC timestamps](#device-timezone-and-accurate-utc-timestamps)
+below. It's `null` unless the device has a configured timezone, so a
+receiver can tell "we don't know" apart from a real midnight-UTC value
+instead of silently getting the wrong instant. `device_timezone` is the
+device's configured IANA zone name (or `null`), so a receiver can localize
+`punch_time_utc` back to the device's own time without hardcoding it.
 
 Only a 2xx response marks it delivered. Failures back off (30s, 2m, 10m, 1h,
 6h) up to `WEBHOOK_MAX_ATTEMPTS` (default 5), after which the record stays
@@ -313,10 +323,10 @@ Edit:
   *exactly* `{{status}}` is substituted with the real typed value (a JSON
   number, not the string `"0"`); a placeholder embedded in a longer string
   (`"Punch by {{pin}}"`) is stringified and interpolated in place. Available
-  placeholders: `pin`, `punch_time`, `punch_time_unix`, `status`,
-  `verify_mode`, `work_code`, `device_id`, `device_serial`, `company_id`,
-  `company_name`, `received_at`. Leaving this off falls back to the default
-  `punch.created` shape above.
+  placeholders: `pin`, `punch_time`, `punch_time_unix`, `punch_time_utc`,
+  `device_timezone`, `status`, `verify_mode`, `work_code`, `device_id`,
+  `device_serial`, `company_id`, `company_name`, `received_at`. Leaving
+  this off falls back to the default `punch.created` shape above.
 
 Example custom body template:
 
@@ -334,6 +344,38 @@ record) to whatever URL/headers/body template are currently in the form —
 including unsaved edits — so you can verify the receiving endpoint's shape
 and auth before going live. It never writes a `PunchRecord` or
 `WebhookDelivery` row; it's a pure connectivity/shape check.
+
+## Device timezone and accurate UTC timestamps
+
+Each device can have a **timezone** set (admin panel → Devices → Edit →
+"Device timezone") — the IANA zone name its clock is set to, e.g.
+`Asia/Kolkata` or `America/New_York`. This is what lets the server work out
+the real UTC instant behind a device's literal wall-clock digits, instead
+of just re-stamping them as if they already were UTC (see the `punch_time`
+caveat above).
+
+- **Opt-in, no forced migration**: unset (the default) leaves every
+  existing behavior completely unchanged — `punchTime` is stored and
+  displayed exactly as it always has been. Setting a timezone only affects
+  punches ingested *after* that point; older rows are never recalculated
+  retroactively.
+- Once set, every new punch also gets **`punchTimeUtc`** computed and
+  stored — the real UTC instant, correctly accounting for DST if the zone
+  observes it. This is `null` on any punch ingested while the device had no
+  timezone configured, so "unknown" is never confused with a real midnight
+  UTC value.
+- The admin panel's Punch Records / Failed Webhooks tables show this as an
+  **"Accurate time"** column (formatted in *your* browser's timezone, unlike
+  the "Punch time" column next to it, which is always shown in forced UTC
+  to match the device's own clock verbatim) — blank until a timezone is
+  configured.
+- The same value goes out over webhooks as `punch_time_utc` /
+  `device_timezone` — see [Webhook delivery](#webhook-delivery) above.
+
+The conversion (`src/adms/timezone.ts`) uses the IANA tz database via
+`Intl`, so it's DST-correct for any real zone; timezone names are validated
+server-side (`isValidTimeZone`) — a typo or made-up zone is rejected with a
+400 rather than silently accepted.
 
 ## Environment variables
 
@@ -354,5 +396,8 @@ npm test
 ```
 
 Covers the ATTLOG tab-separated line parser against the sample payloads
-from the protocol spec, including malformed-line isolation (one bad line
-must never drop the rest of a batch or crash the request).
+from the protocol spec (including malformed-line isolation - one bad line
+must never drop the rest of a batch or crash the request), the device
+timezone conversion (`isValidTimeZone` / `zonedWallClockToUtc`, including
+DST spring-forward/fall-back edge cases), the per-device URL secret
+resolution logic, and the webhook body/header templating engine.

@@ -86,6 +86,7 @@ export interface Device {
   webhookBodyTemplate?: unknown | null;
   deviceSecret?: string | null;
   deviceSecretSet?: boolean;
+  timezone?: string | null;
   createdAt: string;
   company?: { id: string; name: string };
 }
@@ -136,6 +137,7 @@ export interface PunchRecord {
   deviceId: string;
   devicePin: string;
   punchTime: string;
+  punchTimeUtc: string | null;
   status: number;
   verifyMode: number;
   workCode: string | null;
@@ -203,6 +205,7 @@ export const api = {
     serialNumber: string;
     label?: string;
     deviceSecret?: string;
+    timezone?: string;
     webhookUrl?: string;
     webhookEnabled?: boolean;
     webhookHeaders?: Record<string, string> | null;
@@ -213,6 +216,7 @@ export const api = {
     data: Partial<{
       label: string;
       deviceSecret: string | null;
+      timezone: string | null;
       webhookUrl: string | null;
       webhookEnabled: boolean;
       webhookHeaders: Record<string, string> | null;
