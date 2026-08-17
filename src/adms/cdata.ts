@@ -5,7 +5,7 @@ import { deviceLogger } from "../logger";
 import { resolveDevice, sendRejected, sendUnclaimed, touchDevice } from "./deviceLookup";
 import { parseAttlogBody } from "./parsers/attlog";
 import { logDeviceRawData } from "./rawLog";
-import { zonedWallClockToUtc } from "./timezone";
+import { computeTimeZoneOptionValue, zonedWallClockToUtc } from "./timezone";
 import { classifyDbError } from "./dbErrors";
 
 const OK = "OK";
@@ -23,7 +23,15 @@ interface StoreResult {
   stored: boolean;
 }
 
-function buildOptionsResponse(): string {
+// `timezone` (IANA name, e.g. "Asia/Kolkata") is optional - a device with
+// none configured just doesn't get a TimeZone= line, same as this
+// project's reference upstream ships it commented out by default. See
+// computeTimeZoneOptionValue in timezone.ts for what this line is for and
+// why it exists: some firmware resets its own clock the instant it gets
+// network connectivity, with no on-device setting to stop it - this tells
+// the device what its clock/timezone should actually be, directly in the
+// handshake response.
+function buildOptionsResponse(timezone: string | null): string {
   const lines = [
     "GET OPTION FROM: SN",
     "ATTLOGStamp=9999",
@@ -33,6 +41,7 @@ function buildOptionsResponse(): string {
     "TransTimes=00:00;14:05",
     "TransInterval=1",
     "TransFlag=1111111111",
+    ...(timezone ? [`TimeZone=${computeTimeZoneOptionValue(timezone)}`] : []),
     "Realtime=1",
     "Encrypt=0",
   ];
@@ -55,7 +64,7 @@ export async function handleCdataGet(req: Request, res: Response) {
   // device === null: still-unregistered/pending, already captured inside
   // resolveDevice - falls through to the normal OK handshake response.
 
-  sendPlainText(res, buildOptionsResponse());
+  sendPlainText(res, buildOptionsResponse(device?.timezone ?? null));
 }
 
 // Stores a batch of parsed ATTLOG records as a single atomic multi-row

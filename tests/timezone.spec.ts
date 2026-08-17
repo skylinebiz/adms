@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isValidTimeZone, zonedWallClockToUtc } from "../src/adms/timezone";
+import { computeTimeZoneOptionValue, isValidTimeZone, zonedWallClockToUtc } from "../src/adms/timezone";
 
 // UTC-getter fields carry the "wall clock digits" input, matching exactly
 // how parseDeviceDatetime encodes a device's literal reading.
@@ -52,5 +52,22 @@ describe("zonedWallClockToUtc", () => {
     const result = zonedWallClockToUtc(wallClock(2024, 11, 3, 1, 30, 0), "America/New_York");
     expect(result).toBeInstanceOf(Date);
     expect(Number.isNaN(result.getTime())).toBe(false);
+  });
+});
+
+describe("computeTimeZoneOptionValue", () => {
+  // Fixed instant in August so America/New_York is in DST (EDT, -04:00) -
+  // avoids any winter/summer ambiguity in the assertions below.
+  const now = new Date("2026-08-17T12:00:00Z");
+
+  it("sends a whole-hour offset as a plain signed hour integer", () => {
+    expect(computeTimeZoneOptionValue("Asia/Tokyo", now)).toBe("9"); // +09:00
+    expect(computeTimeZoneOptionValue("America/New_York", now)).toBe("-4"); // EDT, -04:00
+    expect(computeTimeZoneOptionValue("UTC", now)).toBe("0");
+  });
+
+  it("sends a fractional-hour offset as total signed minutes", () => {
+    expect(computeTimeZoneOptionValue("Asia/Kolkata", now)).toBe("330"); // +05:30
+    expect(computeTimeZoneOptionValue("Asia/Kathmandu", now)).toBe("345"); // +05:45
   });
 });

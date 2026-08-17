@@ -459,6 +459,28 @@ The conversion (`src/adms/timezone.ts`) uses the IANA tz database via
 server-side (`isValidTimeZone`) — a typo or made-up zone is rejected with a
 400 rather than silently accepted.
 
+### Telling the device its own timezone
+
+Some firmware (observed on an eSSL-branded SilkBio-101TC) resets its own
+clock the instant it gets network connectivity, with no on-device setting
+to stop it — the device's own clock ends up wrong even though this server's
+records stay correct. If a device's `timezone` is set, the handshake
+response (`GET /iclock/cdata`) now includes a `TimeZone=<value>` line
+telling the device what its clock/timezone should actually be — this
+mirrors a real field in the ADMS PUSH protocol (confirmed working against
+the [reference project](https://github.com/saifulcoder/adms-server-ZKTeco)
+this codebase mirrors protocol behavior from, which ships that exact field
+commented out by default). No line is sent for a device with no timezone
+configured.
+
+The value's encoding is unavoidably a best-effort guess (there's no single
+authoritative spec): a whole-hour offset is sent as a plain signed hour
+integer (e.g. `7` for GMT+7 — this is the form with confirmed field
+reports); a fractional offset (e.g. IST's `+05:30`, Nepal's `+05:45`) is
+sent as total signed minutes (e.g. `330`) — unverified against real
+hardware, since no documentation was found confirming a fractional-hour
+form. See `computeTimeZoneOptionValue` in `src/adms/timezone.ts`.
+
 ## Device online/offline status
 
 A device's ONLINE/OFFLINE/UNKNOWN badge in the admin UI is computed on

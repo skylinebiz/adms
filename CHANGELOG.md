@@ -12,6 +12,22 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.5.1] - 2026-08-17
+
+### Added
+
+- Devices with a configured `timezone` now receive a `TimeZone=<value>`
+  line in the ADMS handshake response (`GET /iclock/cdata`), telling
+  firmware that resets its own clock on first network contact (observed
+  on an eSSL SilkBio-101TC) what its clock/timezone should actually be.
+  Mirrors a real, confirmed-working field from the reference project this
+  codebase mirrors protocol behavior from
+  (`github.com/saifulcoder/adms-server-ZKTeco`), which ships it commented
+  out by default. See "Telling the device its own timezone" in the
+  README for the value-encoding caveat (whole-hour offsets are
+  confirmed-working; fractional-hour offsets like IST are a best-effort
+  guess, unverified on real hardware).
+
 ## [2.5.0] - 2026-08-17
 
 ### Added
