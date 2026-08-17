@@ -264,6 +264,8 @@ label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom
 .badge-online { background: var(--success-tint); color: var(--success-text); }
 .badge-offline { background: var(--neutral-tint); color: var(--text-muted); }
 .badge-unknown { background: var(--neutral-tint); color: var(--text-muted); }
+.badge-sent { background: var(--warning-tint); color: var(--warning-text); }
+.badge-acked { background: var(--success-tint); color: var(--success-text); }
 
 .error-banner { background: var(--danger-tint); color: var(--danger); padding: 10px 14px; border-radius: var(--radius-sm); margin-bottom: 16px; font-size: 13px; }
 .notice-banner { background: var(--warning-tint); color: var(--warning-text); padding: 10px 14px; border-radius: var(--radius-sm); margin-bottom: 16px; font-size: 13px; }

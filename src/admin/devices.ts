@@ -456,6 +456,57 @@ devicesRouter.post("/:id/test-webhook", async (req, res) => {
   res.json({ sentBody: body, sentHeaders: renderedHeaders, result });
 });
 
+// Manual raw ADMS command queue - lets an admin push an arbitrary
+// "C:<id>:<command>" line to a device via its next /iclock/getrequest
+// poll, and see whether/how it responds (ACKED with a response body, or
+// left PENDING/SENT if the device never acts on it). Exists specifically
+// for diagnosing what a given firmware actually understands - there's no
+// complete public spec for this protocol, so this is often the only way
+// to find out. `command` is sent completely verbatim, uninterpreted.
+const sendCommandSchema = z.object({ command: z.string().min(1).max(1000) });
+
+devicesRouter.post("/:id/commands", async (req, res) => {
+  const device = await prisma.device.findUnique({ where: { id: req.params.id } });
+  if (!device) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (req.adminUser!.role !== "SUPER_ADMIN" && req.adminUser!.companyId !== device.companyId) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const parsed = sendCommandSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
+    return;
+  }
+
+  const command = await prisma.deviceCommand.create({
+    data: { deviceId: device.id, command: parsed.data.command },
+  });
+  res.status(201).json({ command });
+});
+
+devicesRouter.get("/:id/commands", async (req, res) => {
+  const device = await prisma.device.findUnique({ where: { id: req.params.id } });
+  if (!device) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (req.adminUser!.role !== "SUPER_ADMIN" && req.adminUser!.companyId !== device.companyId) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const commands = await prisma.deviceCommand.findMany({
+    where: { deviceId: device.id },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+  res.json({ commands });
+});
+
 // Raw Data Dump: whatever non-ATTLOG payloads this device has pushed
 // (OPERLOG, USERINFO, FINGERTMP, FACE, or anything else a firmware variant
 // sends), for debugging what a device is actually sending. Optional

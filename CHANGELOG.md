@@ -12,6 +12,21 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.6.0] - 2026-08-17
+
+### Added
+
+- Manual raw ADMS command tool: a new "Send raw ADMS command" section in
+  the device edit drawer (backed by `POST`/`GET
+  /api/admin/devices/:id/commands`) queues an arbitrary command for
+  delivery on the device's next `/iclock/getrequest` poll and shows
+  whether/how it responds. Built after confirming, live against a real
+  eSSL SilkBio-101TC, that the `TimeZone=` field from 2.5.1/2.5.2 is
+  delivered correctly but silently ignored by that firmware - this
+  exists to test what a given firmware actually understands (there's no
+  complete public spec for this protocol) without needing direct
+  database/shell access to the server.
+
 ## [2.5.2] - 2026-08-17
 
 ### Fixed

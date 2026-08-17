@@ -106,6 +106,16 @@ export interface DeviceOption {
   companyId: string;
 }
 
+export interface DeviceCommandLog {
+  id: string;
+  command: string;
+  status: "PENDING" | "SENT" | "ACKED" | "FAILED";
+  response: string | null;
+  createdAt: string;
+  sentAt: string | null;
+  ackedAt: string | null;
+}
+
 export interface DeviceRawLog {
   id: string;
   deviceId: string;
@@ -269,6 +279,9 @@ export const api = {
     get<{ logs: DeviceRawLog[] } & Paginated<DeviceRawLog>>(
       `/devices/${deviceId}/raw-logs${buildQuery({ table: params.table, page: params.page, pageSize: params.pageSize })}`
     ),
+  sendDeviceCommand: (deviceId: string, command: string) =>
+    post<{ command: DeviceCommandLog }>(`/devices/${deviceId}/commands`, { command }),
+  listDeviceCommands: (deviceId: string) => get<{ commands: DeviceCommandLog[] }>(`/devices/${deviceId}/commands`),
 
   listRawRequests: (params: { serialNumber?: string; endpoint?: string } & PageParams = {}) =>
     get<{ requests: RawRequestLog[] } & Paginated<RawRequestLog>>(
