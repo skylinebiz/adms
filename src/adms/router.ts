@@ -6,6 +6,24 @@ import { handleDeviceCmd } from "./devicecmd";
 import { handleTest } from "./test";
 import { logRawRequest } from "./rawLog";
 import { RESERVED_SLUG_VALUES } from "../utils/slug";
+import { deviceLogger } from "../logger";
+
+// Express 4 does not catch a rejected promise thrown inside an async route
+// handler - an unhandled DB error (e.g. Postgres unreachable) would just
+// hang the request until the device's own timeout, and depending on the
+// Node version can crash the *entire process* via an unhandled rejection,
+// taking down every other device's in-flight connection along with it.
+// Every ADMS route handler is async and touches the DB, so every one of
+// them gets wrapped: this forwards any rejection to next(err), which the
+// ADMS-scoped error middleware below turns into a real (plain-text) device
+// response instead of a hang or a crash.
+type AsyncRouteHandler = (req: Request, res: Response) => Promise<void>;
+
+function asyncHandler(fn: AsyncRouteHandler) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    fn(req, res).catch(next);
+  };
+}
 
 // A company slug can never be one of these, even though the
 // `/:companySlug/:secret/iclock` mount would otherwise accept any string
@@ -45,9 +63,25 @@ admsRouter.use(express.text({ type: "*/*", limit: "5mb" }));
 // endpoints/tables the handlers below don't otherwise understand.
 admsRouter.use(logRawRequest);
 
-admsRouter.get("/cdata", handleCdataGet);
-admsRouter.post("/cdata", handleCdataPost);
-admsRouter.get("/getrequest", handleGetRequest);
-admsRouter.post("/devicecmd", handleDeviceCmd);
+admsRouter.get("/cdata", asyncHandler(handleCdataGet));
+admsRouter.post("/cdata", asyncHandler(handleCdataPost));
+admsRouter.get("/getrequest", asyncHandler(handleGetRequest));
+admsRouter.post("/devicecmd", asyncHandler(handleDeviceCmd));
+// handleTest is synchronous (never touches the DB) - no async wrapping needed.
 admsRouter.get("/test", handleTest);
 admsRouter.post("/test", handleTest);
+
+// Catches anything the handlers above didn't handle themselves: a genuine
+// bug, or (via asyncHandler) a DB call that rejected - most commonly
+// Postgres being unreachable. Always plain text, never the admin API's
+// JSON errorHandler - ZKTeco firmware parses the response as text and a
+// JSON body would just confuse it into an endless malformed-response retry
+// loop instead of the clean backoff-and-retry a real 500 gives it.
+admsRouter.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+  if (res.headersSent) return;
+  deviceLogger.error(
+    { err, path: req.path, method: req.method },
+    "unhandled error in ADMS route - responding 500 so the device backs off and retries"
+  );
+  res.status(500).type("text/plain; charset=UTF-8").send("Internal Server Error");
+});

@@ -16,11 +16,18 @@ export async function findDeviceBySerial(serialNumber: string) {
   return prisma.device.findUnique({ where: { serialNumber } });
 }
 
+// Best-effort: a transient failure updating lastSeenAt/status must never
+// block the actual request handling that comes after it (e.g. storing a
+// punch batch that would otherwise have succeeded fine on its own).
 export async function touchDevice(deviceId: string) {
-  await prisma.device.update({
-    where: { id: deviceId },
-    data: { lastSeenAt: new Date(), status: "ONLINE" },
-  });
+  try {
+    await prisma.device.update({
+      where: { id: deviceId },
+      data: { lastSeenAt: new Date(), status: "ONLINE" },
+    });
+  } catch (err) {
+    deviceLogger.error({ err, deviceId }, "failed to update device last-seen/status (best-effort, not fatal)");
+  }
 }
 
 // Pure decision: does this request's path secret satisfy the device's
