@@ -12,6 +12,31 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.6.5] - 2026-08-17
+
+### Documentation
+
+- Rewrote the README's security section: try HTTPS first (many newer
+  ZKTeco/eSSL devices support it - no caveats apply if it works), fall
+  back to plain HTTP only if the device can't, with the existing
+  private-LAN/VPN guidance now scoped specifically to that HTTP-fallback
+  case instead of framed as universal. Reframed the per-device secret
+  explicitly as security-by-obscurity (real, but not encryption).
+  Corrected the previous absolute claim that device firmware "cannot do
+  TLS" - true for many older units, not true in general.
+- Added a "Hosted vs. self-hosted" section: this project is 100% open
+  source with no differences between self-hosting and the free hosted
+  instance at [adms.adrk.in](https://adms.adrk.in) (genuine usage free
+  indefinitely, spam blocked, no uptime SLA), including a note that the
+  platform-level super_admin account the multitenancy architecture
+  requires is never used day-to-day there - every company is fully
+  self-service and isolated.
+- Generalized ZKTeco-specific wording throughout to reflect eSSL support
+  (added in 2.5.0) and general ADMS-protocol compatibility: title, intro,
+  the device-connection section (now mentions trying HTTPS and the eSSL
+  `.aspx` endpoint variant), and two spots describing generic ADMS
+  firmware behavior that were only worded as ZKTeco-specific.
+
 ## [2.6.4] - 2026-08-17
 
 ### Fixed

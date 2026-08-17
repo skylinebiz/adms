@@ -1,9 +1,18 @@
-# ADMS Server for ZKTeco Devices (Multitenant)
+# Multitenant ADMS Server
 
-A Node.js server implementing the ZKTeco ADMS (push protocol) so ZKTeco
-biometric/attendance devices (X100-C, SpeedFace, EFace, etc.) can connect
-directly, with a multitenant admin layer on top: companies, devices, and
-per-device webhook delivery of every punch (ATTLOG) record.
+A Node.js server implementing ADMS (the ZKTeco push protocol) so
+biometric/attendance devices can connect directly, with a multitenant
+admin layer on top: companies, devices, and per-device webhook delivery
+of every punch (ATTLOG) record. Works with **ZKTeco** devices (X100-C,
+SpeedFace, EFace, etc.) and **eSSL** devices (which speak the same
+protocol under the hood, including the `.aspx`-suffixed endpoint variant
+some eSSL firmware uses) — and in general, any device whose firmware
+speaks ADMS/the ZKTeco push protocol should work, since nothing here is
+brand-specific.
+
+**Try it hosted, free**: [adms.adrk.in](https://adms.adrk.in) — sign up,
+get a company URL, point a device at it. No install, nothing to run. See
+[Hosted vs. self-hosted](#hosted-vs-self-hosted) below.
 
 Protocol behavior mirrors [`saifulcoder/adms-server-ZKTeco`](https://github.com/saifulcoder/adms-server-ZKTeco)
 (single-tenant PHP reference), reimplemented in Node/TypeScript with
@@ -13,36 +22,66 @@ Current version: see [`package.json`](package.json) (`version`), also
 shown in the admin UI's sidebar footer. Every change is recorded in
 [`CHANGELOG.md`](CHANGELOG.md) with the version it shipped in.
 
-## ⚠️ Security warning: device traffic is unencrypted
+## Hosted vs. self-hosted
 
-The `/iclock/*` ADMS endpoints are plain HTTP, by protocol necessity — ZKTeco
-firmware cannot do TLS, logins, custom headers, or CSRF tokens (see
-[Architecture](#architecture)). That means everything a device sends —
-serial numbers, punch/attendance data, raw OPERLOG/USERINFO/FINGERTMP/FACE
-payloads — travels **unencrypted and unauthenticated** between the device
-and this server. Anyone on the same network path can read or spoof that
-traffic.
+This project is **100% open source** — self-host it and you get exactly
+the same software, with no feature or behavior differences from the
+hosted version below.
 
-**Do not expose `/iclock/*` directly to the public internet.** Only run this
-server where the network path between it and your devices is trusted:
+[adms.adrk.in](https://adms.adrk.in) is a hosted instance of this same
+codebase, run for convenience and free to use: sign up, get your
+company's URL slug, point your devices at it, no server to run or
+maintain. Genuine usage runs free of cost indefinitely; obvious spam or
+abuse signups get blocked. It's offered on a best-effort basis, not as a
+commercial service — **there's no uptime SLA**.
+
+One architectural detail worth knowing: this app's multitenancy model
+requires a platform-level super_admin account to exist (see [First
+login](#first-login) below), but on adms.adrk.in that account is never
+used day-to-day. Every company that signs up is fully self-service and
+isolated from every other company (see [Company + device
+URLs](#company--device-urls)) — the super_admin account exists because
+the software's architecture requires one, not because anyone is actively
+reviewing or administering tenants' data.
+
+## Security: try HTTPS, fall back to a trusted network
+
+**Try HTTPS first.** Many newer ZKTeco/eSSL devices let you point their
+Cloud Server Setting at an `https://` address, and if yours does, use it
+— that's a real, encrypted connection, no caveats below apply. On
+[adms.adrk.in](https://adms.adrk.in) this is available out of the box. If
+you're self-hosting: this server's own process only speaks plain HTTP
+(see [Architecture](#architecture)) — put a TLS-terminating reverse proxy
+(nginx, Caddy, a cloud load balancer) in front of it and point devices at
+that address instead of directly at port `8080`.
+
+**If your device can't do HTTPS** — common on older firmware, which often
+has no TLS/certificate support at all — it falls back to plain HTTP, and
+everything it sends (serial numbers, punch/attendance data, raw
+OPERLOG/USERINFO/FINGERTMP/FACE payloads) travels **unencrypted and
+unauthenticated, as raw text**. Anyone on the same network path can read
+or spoof that traffic — a real man-in-the-middle risk. This is the one
+case where you should **not expose the ADMS port to the open internet.**
+Keep it on a trusted network instead:
 
 - A **private LAN** the devices and server both sit on, with no direct
   internet exposure of the ADMS port, or
 - A **VPN/private tunnel** (site-to-site VPN, WireGuard, Tailscale, etc.)
   between the device's network and the server if they aren't on the same LAN.
 
+Every device also requires a per-device secret in its URL (see [Company +
+device URLs](#company--device-urls) below), picked by you and embedded in
+the device's own configuration. It's not encryption — it's security by
+obscurity — but it's real: forging punch data for a device requires
+actually knowing or guessing its secret, not just its serial number. It's
+a second layer on top of the HTTPS-or-trusted-network decision above, not
+a replacement for it.
+
 The admin panel (`/api/admin/*`, `/admin`) is authenticated (JWT session
 cookies, bcrypt-hashed passwords) but still travels over plain HTTP unless
-you put a TLS-terminating reverse proxy (nginx, Caddy, a cloud load
-balancer) in front of `server`'s port `8080` — worth doing even on a private
-network, since admin session cookies and credentials pass through it.
-
-Every device requires a per-device secret in its URL (see
-[Company + device URLs](#company--device-urls) below) — it stops SN
-spoofing/forgery (anyone who knows or guesses a serial number can no
-longer inject fake punch data for it), but it is **not** encryption. It
-doesn't replace the LAN/VPN recommendation above; it's a second layer on
-top of it.
+it's behind the same TLS-terminating reverse proxy — worth doing even on a
+private network, since admin session cookies and credentials pass through
+it.
 
 ## Architecture
 
@@ -60,11 +99,16 @@ This split matters: a slow or unreachable tenant webhook can never delay the
 `OK` a device is waiting on, because the ingestion process never touches the
 network for webhook delivery.
 
-## Pointing a real ZKTeco device at this server
+## Pointing a device at this server
 
-On the device: **Menu → COMM → Cloud Server Setting**
+Works the same on ZKTeco and eSSL devices — on the device: **Menu → COMM →
+Cloud Server Setting** (some eSSL menus label it differently, but it's the
+same setting).
 
-- **Server address**: `<host>:<port>/<your-company-slug>/<any-secret-you-choose>`
+- **Server address**: `https://` if your device supports it (see
+  [Security](#security-try-https-fall-back-to-a-trusted-network) above),
+  otherwise `http://` —
+  `<protocol>://<host>:<port>/<your-company-slug>/<any-secret-you-choose>`
   (see [Company + device URLs](#company--device-urls) below) — the company
   slug is required; there's no bare `<host>:<port>` fallback.
 - **Server port**: `8080` (or whatever `PORT` is set to) — only relevant if
@@ -73,7 +117,8 @@ On the device: **Menu → COMM → Cloud Server Setting**
 - **Enable Domain Name**: off (unless you're using a hostname)
 
 The device itself appends `/iclock/cdata`, `/iclock/getrequest`, etc. after
-whatever base address you gave it; there's nothing else to configure on the
+whatever base address you gave it (eSSL firmware appends `.aspx` to those
+same paths — both are handled) — there's nothing else to configure on the
 device.
 
 Before a device's punches will be captured, register its serial number (SN)
@@ -136,10 +181,11 @@ why, and what to expect from an unclaimed device in the meantime.
 
 ## ADMS response codes and retry behavior
 
-Every `/iclock/*` response falls into one of four cases. ZKTeco firmware
-only understands "got a clean 2xx" vs "something went wrong, back off and
-retry" — it can't distinguish *why* — so getting the right code matters
-far less than getting the right ack-vs-retry decision:
+Every `/iclock/*` response falls into one of four cases. ADMS device
+firmware (ZKTeco, eSSL, or otherwise) only understands "got a clean 2xx"
+vs "something went wrong, back off and retry" — it can't distinguish
+*why* — so getting the right code matters far less than getting the
+right ack-vs-retry decision:
 
 | Response | When | Why |
 | --- | --- | --- |
@@ -494,7 +540,7 @@ verified directly on hardware. See `computeTimeZoneOptionValue` in
 ## Device online/offline status
 
 A device's ONLINE/OFFLINE/UNKNOWN badge in the admin UI is computed on
-every read from `lastSeenAt`, never stored. ZKTeco firmware has no
+every read from `lastSeenAt`, never stored. ADMS device firmware has no
 "going offline" signal of its own (no disconnect notice, no last-will) —
 the only honest way to know a device stopped talking is that enough time
 has passed since its last contact:
