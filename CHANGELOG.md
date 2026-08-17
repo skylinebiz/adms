@@ -12,6 +12,27 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.9.1] - 2026-08-17
+
+### Fixed
+
+- Mobile viewport pass across the admin UI. Table-layout's `auto` sizing was
+  squeezing narrow-content cells down to a sliver whenever a table had other
+  wide columns, starving their `flex-wrap` contents of room:
+  - Every table's actions cell (Edit/Webhook/Commands/Delete/etc. buttons)
+    was wrapping one button per line and stretching rows absurdly tall on
+    phone-width screens. Introduced a shared `.actions-cell` class
+    (`min-width: 200px`) and applied it across Devices, Unregistered
+    Devices, Punch Records, Raw Data Dump, and Raw Request Log.
+  - The per-row timezone `<select>` on the Unregistered Devices claim table
+    was squeezed to ~57px, showing only "(UTC" with the option text
+    clipped - an admin couldn't tell what timezone they were about to claim
+    a device with. Same issue on the super-admin company picker in that
+    table. Both cells now carry an explicit `min-width`.
+  - The "Create company" button sat pinned to one side of the form on
+    narrow screens instead of reading as the primary action. It now goes
+    full-width below the Name/Slug fields under 480px.
+
 ## [2.9.0] - 2026-08-17
 
 ### Changed

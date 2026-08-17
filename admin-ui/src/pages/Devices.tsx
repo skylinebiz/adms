@@ -125,7 +125,7 @@ export default function Devices() {
                         </span>
                       )}
                     </td>
-                    <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <td className="actions-cell">
                       <button className="btn btn-sm" onClick={() => setDrawer({ mode: "edit", deviceId: d.id })}>
                         Edit
                       </button>

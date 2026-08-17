@@ -156,7 +156,7 @@ export default function RawDataDump() {
                     </td>
                     <td>{l.method}</td>
                     <td>{l.rawBody?.length ?? 0} chars</td>
-                    <td style={{ display: "flex", gap: 6 }}>
+                    <td className="actions-cell">
                       <button className="btn btn-sm" onClick={() => setViewing(l)}>
                         View
                       </button>

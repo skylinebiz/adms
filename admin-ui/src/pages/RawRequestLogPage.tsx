@@ -143,7 +143,7 @@ export default function RawRequestLogPage() {
                       <code className="mono">{r.endpoint}</code>
                     </td>
                     <td>{r.rawBody?.length ?? 0} chars</td>
-                    <td style={{ display: "flex", gap: 6 }}>
+                    <td className="actions-cell">
                       <button className="btn btn-sm" onClick={() => setViewing(r)}>
                         View
                       </button>

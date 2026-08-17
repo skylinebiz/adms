@@ -165,7 +165,7 @@ export default function AdminUsers() {
                     <td>{u.email}</td>
                     <td>{u.role === "SUPER_ADMIN" ? "Super admin" : "Company admin"}</td>
                     <td>{companies.find((c) => c.id === u.companyId)?.name ?? "—"}</td>
-                    <td style={{ display: "flex", gap: 6 }}>
+                    <td className="actions-cell">
                       {user?.role === "SUPER_ADMIN" && (
                         <button className="btn btn-sm" onClick={() => setResetTarget(u.id)}>
                           Reset password

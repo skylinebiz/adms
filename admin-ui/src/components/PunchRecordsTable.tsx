@@ -201,7 +201,7 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
                         {r.lastWebhookError ?? "—"}
                       </td>
                     )}
-                    <td style={{ display: "flex", gap: 6 }}>
+                    <td className="actions-cell">
                       <button className="btn btn-sm" onClick={() => setViewingDeliveries(r.id)}>
                         Log
                       </button>

@@ -231,6 +231,14 @@ tr:hover td { background: var(--surface-2); }
 .btn-sm { padding: 5px 10px; font-size: 12px; min-height: 28px; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* A table row's action buttons. table-layout:auto can squeeze this cell
+   down to barely wider than its narrowest button on small screens - with
+   no min-width, every button then wraps onto its own line (flex-wrap
+   still applies, but there's no room for two side by side), stretching
+   the whole row absurdly tall. min-width guarantees at least two buttons
+   fit per line regardless of how tight the column gets. */
+.actions-cell { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-width: 200px; }
+
 /* ---------- Forms ---------- */
 
 input, select, textarea {
@@ -253,6 +261,7 @@ label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom
 .field { margin-bottom: 14px; }
 .form-row { display: flex; gap: 12px; flex-wrap: wrap; }
 .form-row > .field { flex: 1; min-width: 160px; }
+.form-row > .btn { flex-shrink: 0; }
 
 /* ---------- Badges / banners ---------- */
 
@@ -281,6 +290,10 @@ label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom
 
 @media (max-width: 480px) {
   .filters .field { flex-basis: 100%; }
+  /* A bare button sitting next to .field siblings in a .form-row (e.g. the
+     "Create company" form) otherwise stays pinned to one edge at phone
+     widths instead of reading as the form's primary action. */
+  .form-row > .btn { flex-basis: 100%; }
 }
 
 /* ---------- Login ---------- */

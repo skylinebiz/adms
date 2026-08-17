@@ -200,7 +200,7 @@ export default function UnregisteredDevices() {
                       <td>{p.pingCount}</td>
                       <td>{new Date(p.lastSeenAt).toLocaleString()}</td>
                       {isSuperAdmin && (
-                        <td>
+                        <td style={{ minWidth: 180 }}>
                           <select
                             value={companyChoice[p.serialNumber] ?? p.companyId ?? ""}
                             onChange={(e) => setCompanyChoice((s) => ({ ...s, [p.serialNumber]: e.target.value }))}
@@ -214,7 +214,10 @@ export default function UnregisteredDevices() {
                           </select>
                         </td>
                       )}
-                      <td>
+                      {/* min-width so the selected zone's label (e.g. "(UTC+05:30) Asia/Calcutta")
+                          stays legible instead of the auto table layout squeezing this column down
+                          to a sliver - the admin needs to actually read what's picked before claiming. */}
+                      <td style={{ minWidth: 240 }}>
                         <select
                           value={timezoneChoice[p.serialNumber] ?? DEFAULT_TIMEZONE}
                           onChange={(e) => setTimezoneChoice((s) => ({ ...s, [p.serialNumber]: e.target.value }))}
@@ -226,7 +229,7 @@ export default function UnregisteredDevices() {
                           ))}
                         </select>
                       </td>
-                      <td style={{ display: "flex", gap: 6 }}>
+                      <td className="actions-cell">
                         <button
                           className="btn btn-sm btn-primary"
                           disabled={claiming === p.serialNumber}
