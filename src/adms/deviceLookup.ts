@@ -36,34 +36,6 @@ export function isDeviceRequestTrusted(
   return deviceSecret === secretFromPath;
 }
 
-// Pure decision: what should a pending (not-yet-claimed) SN's stored
-// secret become after this ping? A secret already on file is never
-// overwritten - even by a mismatch - so nobody can squat/hijack a pending
-// SN's identity by pinging it with a different secret. Only "no secret yet
-// on file" (no row, or a null one) adopts whatever this ping carried.
-export function computeNextPendingSecret(
-  existingSecret: string | null | undefined,
-  secretFromPath: string | undefined
-): string | null {
-  if (existingSecret) return existingSecret;
-  return secretFromPath ?? null;
-}
-
-// Pure decision: what should a pending SN's stored company become after
-// this ping? Same first-write-wins shape as computeNextPendingSecret above,
-// extended to company attribution - once a company is on file for a
-// pending SN, it's never reassigned by a later ping (even one resolving to
-// a *different* company, or one that fails to resolve at all), so a
-// pending SN can't be squatted away from the company that first made
-// contact with it.
-export function computeNextPendingCompanyId(
-  existingCompanyId: string | null | undefined,
-  resolvedCompanyId: string | null
-): string | null {
-  if (existingCompanyId) return existingCompanyId;
-  return resolvedCompanyId;
-}
-
 // Resolves the URL's company-slug segment to a real Company.id, or null if
 // unresolvable (typo'd slug, stale bookmark, or a reserved word already
 // stripped upstream by clearReservedCompanySlug). Never throws.
@@ -110,8 +82,26 @@ export async function logUnregisteredPing(req: Request, serialNumber: string, ra
   }
 }
 
-// Upserts the PendingDevice summary row for a not-yet-claimed SN, applying
-// the adopt/no-adopt rules above for both secret and company. Never throws.
+// Upserts the PendingDevice summary row for a not-yet-claimed SN. A secret
+// or company already on file is never overwritten - even by a mismatch -
+// so nobody can squat/hijack a pending SN's identity by pinging it with a
+// different secret or from a different company's URL. Never throws.
+//
+// This used to be a read-then-decide-then-write (find the row, compute
+// what the new secret/company should be in application code, then upsert)
+// - which is a TOCTOU race: two concurrent first-contact pings for the
+// same SN could both read "no row yet", both decide they're the one to
+// adopt it, and the second upsert would silently clobber the first's
+// secret/company. With self-signup now open to anyone, that's not just a
+// theoretical race - it's a way to steal a device's pending identity by
+// racing its real first ping.
+//
+// Fixed by pushing the "first write wins" rule into the database instead
+// of application code: createMany+skipDuplicates atomically claims the row
+// (a no-op if it already exists), then each of secret/companyId is set via
+// its own compare-and-set UPDATE guarded by `WHERE ... IS NULL` - Postgres
+// serializes concurrent UPDATEs to the same row, so only one can ever win
+// a given field, and the loser's predicate simply no longer matches.
 async function upsertPendingDevice(
   serialNumber: string,
   secretFromPath: string | undefined,
@@ -119,14 +109,29 @@ async function upsertPendingDevice(
 ) {
   if (!serialNumber) return;
   try {
-    const existing = await prisma.pendingDevice.findUnique({ where: { serialNumber } });
-    const nextSecret = computeNextPendingSecret(existing?.secret, secretFromPath);
-    const nextCompanyId = computeNextPendingCompanyId(existing?.companyId, resolvedCompanyId);
-    await prisma.pendingDevice.upsert({
-      where: { serialNumber },
-      create: { serialNumber, secret: nextSecret, companyId: nextCompanyId },
-      update: { secret: nextSecret, companyId: nextCompanyId, lastSeenAt: new Date(), pingCount: { increment: 1 } },
+    await prisma.pendingDevice.createMany({
+      data: [{ serialNumber, pingCount: 0 }],
+      skipDuplicates: true,
     });
+
+    await prisma.pendingDevice.updateMany({
+      where: { serialNumber },
+      data: { lastSeenAt: new Date(), pingCount: { increment: 1 } },
+    });
+
+    if (secretFromPath) {
+      await prisma.pendingDevice.updateMany({
+        where: { serialNumber, secret: null },
+        data: { secret: secretFromPath },
+      });
+    }
+
+    if (resolvedCompanyId) {
+      await prisma.pendingDevice.updateMany({
+        where: { serialNumber, companyId: null },
+        data: { companyId: resolvedCompanyId },
+      });
+    }
   } catch (err) {
     deviceLogger.error({ err, serialNumber }, "failed to upsert pending device");
   }

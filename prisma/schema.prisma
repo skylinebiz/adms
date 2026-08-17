@@ -210,25 +210,29 @@ model UnregisteredDevicePing {
 // One row per not-yet-claimed SN, summarizing what's currently known about
 // it - in particular the secret it's been pinging with, if any, captured on
 // first contact so it carries straight through to the Device record when an
-// admin claims it (no separate provisioning step). See deviceLookup.ts for
-// the adopt/no-adopt rules that keep `secret` from being silently
-// overwritten by a mismatched later ping.
+// admin claims it (no separate provisioning step). See upsertPendingDevice
+// in deviceLookup.ts for the compare-and-set rules that keep `secret` from
+// being overwritten by a mismatched later ping, even under concurrent
+// first-contact pings for the same SN.
 model PendingDevice {
   id           String   @id @default(cuid())
   serialNumber String   @unique
   secret       String?
   // Company resolved from the URL's slug segment at first-contact time
   // (see resolveCompanyIdFromSlug/upsertPendingDevice in deviceLookup.ts).
-  // Null covers legacy /iclock pings and unresolved/typo'd slugs - those
-  // stay in the global/unscoped bucket, visible only to super_admin. Once
-  // set, never reassigned by a later ping - same first-write-wins rule as
-  // `secret`, so a pending SN can't be squatted away from the company that
-  // first made contact with it.
+  // Null covers an unresolved/typo'd slug - those stay in the
+  // global/unscoped bucket, visible only to super_admin. Once set, never
+  // reassigned by a later ping - same compare-and-set rule as `secret`, so
+  // a pending SN can't be squatted away from the company that first made
+  // contact with it.
   companyId    String?
   company      Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
   firstSeenAt  DateTime @default(now())
   lastSeenAt   DateTime @default(now())
-  pingCount    Int      @default(1)
+  // Always created at 0 then immediately bumped to 1 by the same call
+  // (see upsertPendingDevice) - the default exists only as a DB-level
+  // safety net, never actually relied on by application code.
+  pingCount    Int      @default(0)
 
   @@index([companyId])
   @@map("pending_devices")

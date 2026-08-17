@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeNextPendingCompanyId, computeNextPendingSecret, isDeviceRequestTrusted } from "../src/adms/deviceLookup";
+import { isDeviceRequestTrusted } from "../src/adms/deviceLookup";
 
 describe("isDeviceRequestTrusted", () => {
   it("trusts any request (even with no secret) when the device was never secured", () => {
@@ -25,56 +25,10 @@ describe("isDeviceRequestTrusted", () => {
   });
 });
 
-describe("computeNextPendingSecret", () => {
-  it("adopts whatever secret arrives on first sighting (no prior row)", () => {
-    expect(computeNextPendingSecret(undefined, "first-secret")).toBe("first-secret");
-  });
-
-  it("adopts a secret when the prior row exists but has none yet", () => {
-    expect(computeNextPendingSecret(null, "now-secured")).toBe("now-secured");
-  });
-
-  it("stays null when no secret has ever arrived", () => {
-    expect(computeNextPendingSecret(undefined, undefined)).toBeNull();
-    expect(computeNextPendingSecret(null, undefined)).toBeNull();
-  });
-
-  it("keeps the existing secret when a later ping matches it", () => {
-    expect(computeNextPendingSecret("known-secret", "known-secret")).toBe("known-secret");
-  });
-
-  it("never overwrites an existing secret with a mismatched one", () => {
-    expect(computeNextPendingSecret("known-secret", "different-secret")).toBe("known-secret");
-  });
-
-  it("never overwrites an existing secret even if the later ping has none", () => {
-    expect(computeNextPendingSecret("known-secret", undefined)).toBe("known-secret");
-  });
-});
-
-describe("computeNextPendingCompanyId", () => {
-  it("adopts the resolved company on first sighting (no prior row)", () => {
-    expect(computeNextPendingCompanyId(undefined, "company-1")).toBe("company-1");
-  });
-
-  it("adopts a company when the prior row exists but has none yet", () => {
-    expect(computeNextPendingCompanyId(null, "company-1")).toBe("company-1");
-  });
-
-  it("stays null when no slug has ever resolved", () => {
-    expect(computeNextPendingCompanyId(undefined, null)).toBeNull();
-    expect(computeNextPendingCompanyId(null, null)).toBeNull();
-  });
-
-  it("keeps the existing company when a later ping resolves the same one", () => {
-    expect(computeNextPendingCompanyId("company-1", "company-1")).toBe("company-1");
-  });
-
-  it("never reassigns an existing company to a different resolved one", () => {
-    expect(computeNextPendingCompanyId("company-1", "company-2")).toBe("company-1");
-  });
-
-  it("never clears an existing company even if a later ping is unresolved", () => {
-    expect(computeNextPendingCompanyId("company-1", null)).toBe("company-1");
-  });
-});
+// computeNextPendingSecret/computeNextPendingCompanyId were retired when
+// upsertPendingDevice moved from read-then-write to database-level
+// compare-and-set (see deviceLookup.ts) - the first-write-wins invariant
+// they encoded now lives in `WHERE ... IS NULL` guards on the UPDATE
+// statements themselves, not in application-level pure functions, so
+// there's no longer a pure decision to unit test here. The behavior is
+// covered by the end-to-end verification instead.
