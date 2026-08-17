@@ -9,6 +9,7 @@ import { admsRouter, clearReservedCompanySlug } from "./adms/router";
 import { adminApiRouter } from "./admin/router";
 import { errorHandler } from "./middleware/errorHandler";
 import { seedBootstrapAdmin } from "./admin/seed";
+import { prisma } from "./db/client";
 
 async function main() {
   await seedBootstrapAdmin();
@@ -57,7 +58,18 @@ async function main() {
     });
   }
 
-  app.get("/health", (_req, res) => res.json({ ok: true }));
+  // A real DB round-trip, not just "the process is up" - orchestrators
+  // (docker compose healthcheck, k8s probes) need to know when the server
+  // can't actually serve requests, not just that it's listening.
+  app.get("/health", async (_req, res) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      res.json({ ok: true });
+    } catch (err) {
+      logger.error({ err }, "health check failed - database unreachable");
+      res.status(503).json({ ok: false, error: "database unreachable" });
+    }
+  });
 
   app.use(errorHandler);
 

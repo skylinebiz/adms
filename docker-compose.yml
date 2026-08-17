@@ -43,6 +43,14 @@ services:
       ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD}
     ports:
       - "8080:8080"
+    healthcheck:
+      # No curl/wget guaranteed in the image - Node 20's global fetch avoids
+      # depending on what's actually installed in the base image.
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   worker:
     build: .
