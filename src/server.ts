@@ -22,12 +22,20 @@ async function main() {
   // that motivated it: a device firmware pinging a path we don't serve
   // (e.g. bare /iclock/cdata with no company prefix) previously 404'd with
   // zero trace anywhere. Plain console.log, not pino - this is a
-  // watch-the-terminal debugging aid, one readable line per request.
+  // watch-the-terminal debugging aid, one readable line per event.
+  //
+  // Logged at arrival ([req]) AND at completion ([res]), not just on
+  // finish: a request that hangs or whose client aborts mid-response never
+  // fires "finish", and would otherwise leave no trace despite having
+  // fully arrived. (Connections that never produce a parseable HTTP
+  // request at all can't reach any Express middleware - those are covered
+  // by the [tcp] socket-level logs on the listen server below.)
   app.use((req, res, next) => {
     const startedAt = Date.now();
+    console.log(`[req] ${req.method} ${req.originalUrl} (from ${req.ip})`);
     res.on("finish", () => {
       console.log(
-        `[req] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${Date.now() - startedAt}ms)`
+        `[res] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${Date.now() - startedAt}ms)`
       );
     });
     next();
@@ -89,8 +97,33 @@ async function main() {
 
   app.use(errorHandler);
 
-  app.listen(config.port, () => {
+  const server = app.listen(config.port, () => {
     logger.info({ port: config.port }, "ADMS server listening");
+  });
+
+  // Socket-level visibility, beneath Express entirely: a client that opens
+  // TCP but never sends a parseable HTTP request (garbage bytes, or - the
+  // classic device misconfiguration - a TLS/HTTPS handshake against this
+  // plain-HTTP port) never reaches any middleware, so the [req] logging
+  // above can't see it. These two hooks make even that show up.
+  //
+  // Note: with docker-compose port publishing, remoteAddress is Docker's
+  // proxy/gateway IP for every client, not the device's real LAN IP - the
+  // value here is seeing THAT something connected, not who.
+  server.on("connection", (socket) => {
+    console.log(`[tcp] connection from ${socket.remoteAddress}:${socket.remotePort}`);
+  });
+  server.on("clientError", (err: NodeJS.ErrnoException, socket) => {
+    console.log(
+      `[tcp] client error: ${err.code ?? err.message} - connection sent something that isn't valid HTTP for this port (TLS/HTTPS against plain HTTP? raw garbage?)`
+    );
+    // Per Node docs: attaching a clientError listener takes over closing
+    // the socket - reply with a minimal 400 if still possible, never leak it.
+    if (err.code !== "ECONNRESET" && socket.writable) {
+      socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+    } else {
+      socket.destroy();
+    }
   });
 }
 

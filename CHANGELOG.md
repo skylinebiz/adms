@@ -12,6 +12,18 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.4.1] - 2026-08-17
+
+### Fixed
+
+- Request logging now covers every connection, not just requests that got
+  a complete response: each request logs at arrival (`[req]`, with client
+  IP) as well as completion (`[res]`, with status + duration), and raw
+  TCP connections + protocol errors log at the socket level (`[tcp]`) -
+  so a device that opens a connection but never speaks valid HTTP (e.g.
+  HTTPS against the plain-HTTP port, or garbage bytes) is visible too,
+  instead of leaving no trace.
+
 ## [2.4.0] - 2026-08-17
 
 ### Added
