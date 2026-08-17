@@ -12,6 +12,16 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.7.0] - 2026-08-17
+
+### Added
+
+- `robots.txt` disallowing every crawler (`User-agent: *`, `Disallow: /`)
+  - this is a backend service, nothing here is meant to be indexed by
+  search engines or AI/LLM crawlers.
+- `/` now redirects (301) to `/admin` instead of 404ing - nothing is
+  actually served at the bare root path.
+
 ## [2.6.5] - 2026-08-17
 
 ### Documentation

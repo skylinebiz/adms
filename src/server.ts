@@ -73,6 +73,20 @@ async function main() {
 
   app.use("/api/admin", adminApiRouter);
 
+  // Backend service, not a content site - nothing here is meant to be
+  // crawled or indexed, by search engines or AI/LLM crawlers alike.
+  // Disallowing "/" for User-agent: * covers every crawler that respects
+  // robots.txt (GPTBot, ClaudeBot, CCBot, Google-Extended, Bingbot,
+  // Googlebot, etc.) without maintaining a name-by-name list.
+  app.get("/robots.txt", (_req, res) => {
+    res.type("text/plain").send("User-agent: *\nDisallow: /\n");
+  });
+
+  // Nothing is actually served at "/" - the admin UI lives under /admin,
+  // and device traffic requires a company-slug prefix. Redirect straight
+  // there instead of a bare 404 on the bookmark-this-server default path.
+  app.get("/", (_req, res) => res.redirect(301, "/admin"));
+
   // --- Static admin SPA build (if present) ---
   const adminUiDist = path.join(__dirname, "..", "admin-ui", "dist");
   if (fs.existsSync(adminUiDist)) {
