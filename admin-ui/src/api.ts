@@ -43,6 +43,11 @@ export interface PageParams {
   pageSize?: number;
 }
 
+// Public - no session required, so the login/signup screens can show it too.
+export function getVersion() {
+  return get<{ version: string }>("/version");
+}
+
 export interface Paginated<T> {
   total: number;
   page: number;

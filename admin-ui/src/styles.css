@@ -152,6 +152,7 @@ a:hover { text-decoration: underline; }
   color: #8b93a1;
 }
 .sidebar .user-info div:first-child { color: #dfe3ea; font-weight: 500; word-break: break-word; }
+.sidebar .app-version { padding: 0 20px 4px; font-size: 11px; color: #565d6b; }
 
 .main { flex: 1; min-width: 0; padding: 28px 32px; max-width: 1200px; }
 .main h2 { margin-top: 0; }

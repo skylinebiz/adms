@@ -12,6 +12,17 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.3.0] - 2026-08-17
+
+### Added
+
+- Application version number, shown in the admin UI's sidebar footer.
+  Served from a new public `GET /api/admin/version` endpoint, sourced
+  directly from `package.json` so it can't drift out of sync.
+- This CHANGELOG's forward-looking process: from this version on, every
+  change bumps `package.json`'s version and gets an entry here, in the
+  same commit.
+
 ## [2.2.0] - 2026-08-17
 
 ### Added

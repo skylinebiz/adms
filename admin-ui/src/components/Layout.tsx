@@ -1,17 +1,27 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { getVersion } from "../api";
 
 export default function Layout() {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
+  const [version, setVersion] = useState<string | null>(null);
 
   // Close the off-canvas nav whenever the route changes (e.g. after tapping a link).
   useEffect(() => {
     setNavOpen(false);
   }, [location.pathname]);
+
+  // Public endpoint, fetched once - failure just means no version shows,
+  // never worth blocking or erroring the whole layout over.
+  useEffect(() => {
+    getVersion()
+      .then((v) => setVersion(v.version))
+      .catch(() => {});
+  }, []);
 
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
@@ -72,6 +82,7 @@ export default function Layout() {
               Log out
             </a>
           </div>
+          {version && <div className="app-version">v{version}</div>}
         </aside>
         <main className="main">
           <Outlet />
