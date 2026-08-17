@@ -7,6 +7,8 @@ import { handleTest } from "./test";
 import { logRawRequest } from "./rawLog";
 import { RESERVED_SLUG_VALUES } from "../utils/slug";
 import { deviceLogger } from "../logger";
+import { config } from "../config";
+import { prisma } from "../db/client";
 
 // Express 4 does not catch a rejected promise thrown inside an async route
 // handler - an unhandled DB error (e.g. Postgres unreachable) would just
@@ -55,8 +57,12 @@ export function clearReservedCompanySlug(req: Request, _res: Response, next: Nex
 export const admsRouter = Router({ mergeParams: true });
 
 // ZKTeco payloads are plain tab-separated text, not JSON/urlencoded - parse
-// the raw body as text for every /iclock/* route.
-admsRouter.use(express.text({ type: "*/*", limit: "5mb" }));
+// the raw body as text for every /iclock/* route. FACE/FINGERTMP/photo
+// payloads on some firmware are the realistic reason to ever need this
+// higher than the default - configurable via ADMS_MAX_BODY_SIZE (see
+// config.ts) since raising it is a real memory tradeoff (each in-flight
+// request buffers its whole body), not something to bump reflexively.
+admsRouter.use(express.text({ type: "*/*", limit: config.admsMaxBodySize }));
 
 // Unconditional debug firehose (super-admin only view) - every request,
 // before any routing/business logic, so it captures traffic even for
@@ -71,14 +77,58 @@ admsRouter.post("/devicecmd", asyncHandler(handleDeviceCmd));
 admsRouter.get("/test", handleTest);
 admsRouter.post("/test", handleTest);
 
+interface PayloadTooLargeError {
+  type?: string;
+  status?: number;
+  statusCode?: number;
+  length?: number;
+  limit?: number;
+}
+
+function isPayloadTooLarge(err: unknown): err is PayloadTooLargeError {
+  const e = err as PayloadTooLargeError;
+  return e?.type === "entity.too.large" || e?.status === 413 || e?.statusCode === 413;
+}
+
 // Catches anything the handlers above didn't handle themselves: a genuine
-// bug, or (via asyncHandler) a DB call that rejected - most commonly
-// Postgres being unreachable. Always plain text, never the admin API's
-// JSON errorHandler - ZKTeco firmware parses the response as text and a
-// JSON body would just confuse it into an endless malformed-response retry
-// loop instead of the clean backoff-and-retry a real 500 gives it.
+// bug, (via asyncHandler) a DB call that rejected - most commonly Postgres
+// being unreachable - or the body-parser above rejecting an oversized
+// payload before any handler even ran. Always plain text, never the admin
+// API's JSON errorHandler - ZKTeco firmware parses the response as text
+// and a JSON body would just confuse it into an endless malformed-response
+// retry loop instead of the clean backoff-and-retry a real error gives it.
 admsRouter.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
   if (res.headersSent) return;
+
+  if (isPayloadTooLarge(err)) {
+    // Unlike a transient DB error, retrying an oversized payload gets the
+    // identical result forever - withholding the ack would just wedge the
+    // device on it permanently. Ack `OK` so it moves on, but this is real
+    // device data that got silently dropped, so log it loudly (deviceLogger
+    // *and* a RawRequestLog row, same visibility as every other request,
+    // so a super_admin can actually see it happened instead of it only
+    // existing in server logs nobody's watching).
+    const sn = typeof req.query.SN === "string" ? req.query.SN : undefined;
+    deviceLogger.error(
+      { sn, endpoint: req.path, limit: err.limit, length: err.length },
+      "device payload exceeded ADMS_MAX_BODY_SIZE - payload was NOT recorded, acking OK anyway so the device doesn't wedge on it"
+    );
+    prisma.rawRequestLog
+      .create({
+        data: {
+          serialNumber: sn ?? null,
+          endpoint: req.path,
+          method: req.method,
+          query: JSON.stringify(req.query),
+          headers: JSON.stringify(req.headers),
+          rawBody: `[dropped: payload of ${err.length ?? "unknown"} bytes exceeded the ${err.limit ?? "configured"}-byte ADMS_MAX_BODY_SIZE limit]`,
+        },
+      })
+      .catch((logErr) => deviceLogger.error({ err: logErr }, "failed to log oversized-payload drop"));
+    res.status(200).type("text/plain; charset=UTF-8").send("OK");
+    return;
+  }
+
   deviceLogger.error(
     { err, path: req.path, method: req.method },
     "unhandled error in ADMS route - responding 500 so the device backs off and retries"
