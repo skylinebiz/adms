@@ -9,6 +9,10 @@ Protocol behavior mirrors [`saifulcoder/adms-server-ZKTeco`](https://github.com/
 (single-tenant PHP reference), reimplemented in Node/TypeScript with
 multitenancy and per-device webhooks added on top.
 
+Current version: see [`package.json`](package.json) (`version`), also
+shown in the admin UI's sidebar footer. Every change is recorded in
+[`CHANGELOG.md`](CHANGELOG.md) with the version it shipped in.
+
 ## ⚠️ Security warning: device traffic is unencrypted
 
 The `/iclock/*` ADMS endpoints are plain HTTP, by protocol necessity — ZKTeco
