@@ -35,25 +35,28 @@ export async function logRawRequest(req: Request, _res: Response, next: NextFunc
 // Curated per-device dump: anything a *registered* device pushes to
 // /iclock/cdata that isn't ATTLOG (OPERLOG, USERINFO, FINGERTMP, FACE,
 // photos, or any other table name a firmware variant sends).
+//
+// Unlike logRawRequest above, this one is real device data we're supposed
+// to be storing (not just an ancillary debug log), so it deliberately does
+// NOT swallow its own errors - the caller (handleCdataPost) classifies the
+// failure via classifyDbError and decides whether to withhold the ack
+// (transient - let the device retry) or still ack `OK` (a genuinely
+// unstorable payload, where retrying would just fail identically forever).
 export async function logDeviceRawData(
   req: Request,
   deviceId: string,
   table: string | undefined,
   rawBody: string
 ) {
-  try {
-    await prisma.deviceRawLog.create({
-      data: {
-        deviceId,
-        endpoint: req.path,
-        method: req.method,
-        table: table || null,
-        query: JSON.stringify(req.query),
-        headers: JSON.stringify(req.headers),
-        rawBody: truncate(rawBody),
-      },
-    });
-  } catch (err) {
-    deviceLogger.error({ err, deviceId, table }, "failed to persist device raw log");
-  }
+  await prisma.deviceRawLog.create({
+    data: {
+      deviceId,
+      endpoint: req.path,
+      method: req.method,
+      table: table || null,
+      query: JSON.stringify(req.query),
+      headers: JSON.stringify(req.headers),
+      rawBody: truncate(rawBody),
+    },
+  });
 }
