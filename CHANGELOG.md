@@ -12,6 +12,18 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.5.2] - 2026-08-17
+
+### Fixed
+
+- The `TimeZone=` handshake fix from 2.5.1 only reached devices that
+  repeat the full `GET /iclock/cdata` handshake regularly. Confirmed live
+  against a real eSSL SilkBio-101TC that it does not - it lives almost
+  entirely in the `GET /iclock/getrequest` poll loop instead, so the
+  device never actually saw the fix. `TimeZone=<value>` is now also sent
+  from `getrequest`, on every poll (not just once), so a device that
+  drifts again for any reason self-corrects within one poll cycle.
+
 ## [2.5.1] - 2026-08-17
 
 ### Added
