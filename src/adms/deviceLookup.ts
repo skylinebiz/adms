@@ -102,14 +102,18 @@ export async function logUnregisteredPing(req: Request, serialNumber: string, ra
 // its own compare-and-set UPDATE guarded by `WHERE ... IS NULL` - Postgres
 // serializes concurrent UPDATEs to the same row, so only one can ever win
 // a given field, and the loser's predicate simply no longer matches.
+// Returns whether this call is what actually created the row (true only on
+// genuine first contact for this SN) - resolveDevice uses this to decide
+// whether to also write an UnregisteredDevicePing entry, so a device stuck
+// unclaimed doesn't pile up a duplicate log row on every single retry.
 async function upsertPendingDevice(
   serialNumber: string,
   secretFromPath: string | undefined,
   resolvedCompanyId: string | null
-) {
-  if (!serialNumber) return;
+): Promise<{ isNew: boolean }> {
+  if (!serialNumber) return { isNew: false };
   try {
-    await prisma.pendingDevice.createMany({
+    const created = await prisma.pendingDevice.createMany({
       data: [{ serialNumber, pingCount: 0 }],
       skipDuplicates: true,
     });
@@ -132,8 +136,11 @@ async function upsertPendingDevice(
         data: { companyId: resolvedCompanyId },
       });
     }
+
+    return { isNew: created.count > 0 };
   } catch (err) {
     deviceLogger.error({ err, serialNumber }, "failed to upsert pending device");
+    return { isNew: false };
   }
 }
 
@@ -149,11 +156,13 @@ export interface DeviceResolution {
 //
 //   - no Device row for this SN -> still-unregistered/pending. Captures the
 //     SN + whatever secret arrived, plus the company resolved from the
-//     URL's slug segment if any (raw ping log + PendingDevice upsert), and
-//     always resolves as untrusted; callers must still ack `OK` for this
-//     case (unchanged "always ack OK" convention for the
-//     unregistered/pending flow). The company slug never affects trust for
-//     an already-registered device below - only SN + per-device secret do.
+//     URL's slug segment if any (PendingDevice upsert; a raw
+//     UnregisteredDevicePing row too, but only on genuine first contact -
+//     see upsertPendingDevice's isNew), and always resolves as untrusted;
+//     callers must still ack `OK` for this case (unchanged "always ack OK"
+//     convention for the unregistered/pending flow). The company slug
+//     never affects trust for an already-registered device below - only
+//     SN + per-device secret do.
 //   - Device found, deviceSecret null -> never secured, trusted.
 //   - Device found, deviceSecret set and matches the path secret -> trusted.
 //   - Device found, deviceSecret set and missing/mismatched -> NOT trusted.
@@ -179,7 +188,14 @@ export async function resolveDevice(req: Request, rawBody?: string): Promise<Dev
 
   const companySlug = req.params.companySlug as string | undefined;
   const resolvedCompanyId = await resolveCompanyIdFromSlug(companySlug);
-  await logUnregisteredPing(req, sn, rawBody);
-  await upsertPendingDevice(sn, secretFromPath, resolvedCompanyId);
+  const { isNew } = await upsertPendingDevice(sn, secretFromPath, resolvedCompanyId);
+  // Log the raw ping on genuine first contact (isNew) so an admin can still
+  // see exactly what a new SN's first request looked like. A missing SN
+  // never gets a PendingDevice row at all (upsertPendingDevice no-ops for
+  // it), so `!sn` always logs - that specific noise case is unrelated to
+  // this feature and untouched here.
+  if (!sn || isNew) {
+    await logUnregisteredPing(req, sn, rawBody);
+  }
   return { device: null, trusted: false };
 }
