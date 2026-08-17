@@ -19,7 +19,7 @@ import { RESERVED_SLUG_VALUES } from "../utils/slug";
 // PendingDevice it creates) rather than accidentally scoping to a fake
 // company.
 export function clearReservedCompanySlug(req: Request, _res: Response, next: NextFunction) {
-  if (req.params.companySlug && RESERVED_SLUG_VALUES.has(req.params.companySlug)) {
+  if (req.params.companySlug && RESERVED_SLUG_VALUES.has(req.params.companySlug.toLowerCase())) {
     delete req.params.companySlug;
   }
   next();

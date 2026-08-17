@@ -67,10 +67,19 @@ export function computeNextPendingCompanyId(
 // Resolves the URL's company-slug segment to a real Company.id, or null if
 // unresolvable (typo'd slug, stale bookmark, or a reserved word already
 // stripped upstream by clearReservedCompanySlug). Never throws.
+//
+// Case-insensitive: stored slugs are always lowercase (slugSchema rejects
+// uppercase at signup/company-create time), but a device's URL is typed by
+// a human into a physical keypad - normalizing the incoming segment before
+// the lookup means a stray capital letter doesn't silently drop the ping
+// into the unscoped bucket.
 export async function resolveCompanyIdFromSlug(companySlug: string | undefined): Promise<string | null> {
   if (!companySlug) return null;
   try {
-    const company = await prisma.company.findUnique({ where: { slug: companySlug }, select: { id: true } });
+    const company = await prisma.company.findUnique({
+      where: { slug: companySlug.toLowerCase() },
+      select: { id: true },
+    });
     return company?.id ?? null;
   } catch (err) {
     deviceLogger.error({ err, companySlug }, "failed to resolve company slug for pending device");
