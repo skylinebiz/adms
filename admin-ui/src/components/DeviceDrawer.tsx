@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { api, ApiError, CompanyOption, Device, DeviceCommandLog, TestWebhookResult } from "../api";
+import { DEFAULT_TIMEZONE, TIMEZONE_OPTIONS } from "../utils/timezoneOptions";
 
 interface Props {
   deviceId: string | null;
@@ -63,92 +64,6 @@ function generateRandomSecret(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-// A modest hand-picked fallback for the rare browser without
-// Intl.supportedValuesOf, so the select still has real options rather than
-// being stuck on just "unset".
-const FALLBACK_TIMEZONES = [
-  "UTC",
-  "America/Los_Angeles",
-  "America/Denver",
-  "America/Chicago",
-  "America/New_York",
-  "America/Sao_Paulo",
-  "Europe/London",
-  "Europe/Paris",
-  "Europe/Moscow",
-  "Africa/Cairo",
-  "Asia/Dubai",
-  "Asia/Kolkata",
-  "Asia/Dhaka",
-  "Asia/Bangkok",
-  "Asia/Shanghai",
-  "Asia/Tokyo",
-  "Australia/Sydney",
-  "Pacific/Auckland",
-];
-
-function listTimeZones(): string[] {
-  try {
-    const supported = (Intl as unknown as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf?.(
-      "timeZone"
-    );
-    return supported && supported.length > 0 ? supported : FALLBACK_TIMEZONES;
-  } catch {
-    return FALLBACK_TIMEZONES;
-  }
-}
-
-// Current UTC offset in minutes for `tz` (positive = ahead of UTC). Used
-// only to sort/label the picker - approximate for DST zones (based on
-// today's date), not the ingestion-time conversion logic.
-function currentOffsetMinutes(tz: string): number {
-  // Both the formatting and the subtraction below must read the same
-  // instant, at the same (seconds-included) precision - formatting to
-  // minute precision while subtracting a full-precision Date.now() loses
-  // up to 59s, which Math.round then silently rounds down to the wrong
-  // minute (e.g. Kolkata's exact +05:30 showing as +05:29).
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).formatToParts(now);
-  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? "0");
-  const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
-  return Math.round((asUtc - now.getTime()) / 60000);
-}
-
-function formatOffset(minutes: number): string {
-  const sign = minutes < 0 ? "-" : "+";
-  const abs = Math.abs(minutes);
-  const h = String(Math.floor(abs / 60)).padStart(2, "0");
-  const m = String(abs % 60).padStart(2, "0");
-  return `UTC${sign}${h}:${m}`;
-}
-
-interface TimezoneOption {
-  tz: string;
-  label: string;
-  offsetMinutes: number;
-}
-
-// Sorted by offset (west to east) then name, so zones sharing an offset are
-// still easy to scan - e.g. all the UTC+05:30 zones sit together.
-function buildTimezoneOptions(): TimezoneOption[] {
-  return listTimeZones()
-    .map((tz) => {
-      const offsetMinutes = currentOffsetMinutes(tz);
-      return { tz, offsetMinutes, label: `(${formatOffset(offsetMinutes)}) ${tz}` };
-    })
-    .sort((a, b) => a.offsetMinutes - b.offsetMinutes || a.tz.localeCompare(b.tz));
-}
-const TIMEZONE_OPTIONS = buildTimezoneOptions();
-
 export default function DeviceDrawer({ deviceId, mode, companies, defaultCompanyId, onClose, onSaved }: Props) {
   const [device, setDevice] = useState<Device | null>(null);
   const [companyId, setCompanyId] = useState(defaultCompanyId ?? companies[0]?.id ?? "");
@@ -162,7 +77,10 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
   const [webhookEnabled, setWebhookEnabled] = useState(false);
   const [deviceSecret, setDeviceSecret] = useState("");
   const [showSecret, setShowSecret] = useState(false);
-  const [timezone, setTimezone] = useState("");
+  // Mandatory on every device now - default to IST as a starting point
+  // for create mode (this deployment's primary operating timezone), still
+  // freely changeable before saving.
+  const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -200,7 +118,7 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
         setWebhookUrl(device.webhookUrl ?? "");
         setWebhookEnabled(device.webhookEnabled);
         setDeviceSecret(device.deviceSecret ?? "");
-        setTimezone(device.timezone ?? "");
+        setTimezone(device.timezone);
         setHeaderRows(headersToRows(device.webhookHeaders));
         if (device.webhookBodyTemplate) {
           setUseCustomBody(true);
@@ -260,7 +178,7 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
           serialNumber,
           label: label || undefined,
           deviceSecret,
-          timezone: timezone || undefined,
+          timezone,
           webhookUrl: webhookUrl || undefined,
           webhookEnabled,
           webhookHeaders,
@@ -270,7 +188,7 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
         await api.updateDevice(deviceId, {
           label,
           deviceSecret,
-          timezone: timezone || null,
+          timezone,
           webhookUrl: webhookUrl || null,
           webhookEnabled,
           webhookHeaders,
@@ -420,12 +338,11 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
           <div className="field">
             <label>Device timezone</label>
             <div className="muted" style={{ marginBottom: 6 }}>
-              The IANA timezone this device's clock is set to (e.g. "Asia/Kolkata"). Once set, new punches also get
-              an accurate UTC timestamp computed from it - existing punches aren't recalculated retroactively.
-              Leave blank if unknown; punch times keep showing exactly as the device's clock reports them either way.
+              The IANA timezone this device's clock is set to (e.g. "Asia/Kolkata"). Required - used to compute an
+              accurate UTC timestamp for every punch, and sent to the device itself in the ADMS handshake response
+              (see README) so firmware that resets its own clock on connect gets told what it should actually be.
             </div>
-            <select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
-              <option value="">(unset - accurate UTC time not computed)</option>
+            <select value={timezone} onChange={(e) => setTimezone(e.target.value)} required>
               {TIMEZONE_OPTIONS.map((opt) => (
                 <option key={opt.tz} value={opt.tz}>
                   {opt.label}

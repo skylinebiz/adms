@@ -429,28 +429,27 @@ and auth before going live. It never writes a `PunchRecord` or
 
 ## Device timezone and accurate UTC timestamps
 
-Each device can have a **timezone** set (admin panel → Devices → Edit →
-"Device timezone") — the IANA zone name its clock is set to, e.g.
-`Asia/Kolkata` or `America/New_York`. This is what lets the server work out
-the real UTC instant behind a device's literal wall-clock digits, instead
-of just re-stamping them as if they already were UTC (see the `punch_time`
-caveat above).
+Every device has a **timezone** (admin panel → Devices → Edit → "Device
+timezone", or set right on the claim form in Unregistered Devices) — the
+IANA zone name its clock is set to, e.g. `Asia/Kolkata` or
+`America/New_York`. This is what lets the server work out the real UTC
+instant behind a device's literal wall-clock digits, instead of just
+re-stamping them as if they already were UTC (see the `punch_time` caveat
+above) — and it's what gets sent back to the device itself in the ADMS
+handshake response (see "Telling the device its own timezone" below).
 
-- **Opt-in, no forced migration**: unset (the default) leaves every
-  existing behavior completely unchanged — `punchTime` is stored and
-  displayed exactly as it always has been. Setting a timezone only affects
-  punches ingested *after* that point; older rows are never recalculated
-  retroactively.
-- Once set, every new punch also gets **`punchTimeUtc`** computed and
-  stored — the real UTC instant, correctly accounting for DST if the zone
-  observes it. This is `null` on any punch ingested while the device had no
-  timezone configured, so "unknown" is never confused with a real midnight
-  UTC value.
+- **Mandatory**: required both when registering a device directly and when
+  claiming one from Unregistered Devices — there's no way to create a
+  device without one. Devices that existed before this requirement were
+  one-time backfilled to `Asia/Kolkata`; change it per device in the edit
+  drawer if a particular one is actually in a different zone.
+- Every punch gets **`punchTimeUtc`** computed and stored alongside
+  `punchTime` — the real UTC instant, correctly accounting for DST if the
+  zone observes it.
 - The admin panel's Punch Records / Failed Webhooks tables show this as an
-  **"Accurate time"** column (formatted in *your* browser's timezone, unlike
-  the "Punch time" column next to it, which is always shown in forced UTC
-  to match the device's own clock verbatim) — blank until a timezone is
-  configured.
+  **"Accurate time"** column, formatted in *your* browser's timezone,
+  unlike the "Punch time" column next to it, which is always shown in
+  forced UTC to match the device's own clock verbatim.
 - The same value goes out over webhooks as `punch_time_utc` /
   `device_timezone` — see [Webhook delivery](#webhook-delivery) above.
 

@@ -94,7 +94,8 @@ export interface Device {
   // Absent in list responses (masked out); when present (detail view),
   // always a real string - mandatory on every device now.
   deviceSecret?: string;
-  timezone?: string | null;
+  // Mandatory on every device now - always a real IANA zone name.
+  timezone: string;
   createdAt: string;
   company?: { id: string; name: string; slug: string };
 }
@@ -227,7 +228,7 @@ export const api = {
     serialNumber: string;
     label?: string;
     deviceSecret: string;
-    timezone?: string;
+    timezone: string;
     webhookUrl?: string;
     webhookEnabled?: boolean;
     webhookHeaders?: Record<string, string> | null;
@@ -238,7 +239,7 @@ export const api = {
     data: Partial<{
       label: string;
       deviceSecret: string;
-      timezone: string | null;
+      timezone: string;
       webhookUrl: string | null;
       webhookEnabled: boolean;
       webhookHeaders: Record<string, string> | null;
@@ -269,7 +270,7 @@ export const api = {
         }[];
       } & Paginated<unknown>
     >(`/devices/unregistered-pings${buildQuery({ page: params.page, pageSize: params.pageSize })}`),
-  claimDevice: (data: { serialNumber: string; companyId: string; label?: string }) =>
+  claimDevice: (data: { serialNumber: string; companyId: string; label?: string; timezone: string }) =>
     post<{ device: Device }>("/devices/claim", data),
   deleteUnregisteredPing: (serialNumber: string) =>
     del<{ ok: true; deleted: number }>(`/devices/unregistered-pings/${encodeURIComponent(serialNumber)}`),

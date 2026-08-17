@@ -3,6 +3,7 @@ import { api, ApiError, CompanyOption } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useSelection } from "../hooks/useSelection";
 import Pagination from "../components/Pagination";
+import { DEFAULT_TIMEZONE, TIMEZONE_OPTIONS } from "../utils/timezoneOptions";
 
 const PAGE_SIZE = 25;
 
@@ -26,6 +27,7 @@ export default function UnregisteredDevices() {
   const [error, setError] = useState<string | null>(null);
   const [claiming, setClaiming] = useState<string | null>(null);
   const [companyChoice, setCompanyChoice] = useState<Record<string, string>>({});
+  const [timezoneChoice, setTimezoneChoice] = useState<Record<string, string>>({});
   const { selected, toggle, toggleAll, clear } = useSelection();
 
   async function load() {
@@ -62,10 +64,11 @@ export default function UnregisteredDevices() {
       setError("Choose a company before claiming a device");
       return;
     }
+    const timezone = timezoneChoice[serialNumber] ?? DEFAULT_TIMEZONE;
     setClaiming(serialNumber);
     setError(null);
     try {
-      await api.claimDevice({ serialNumber, companyId });
+      await api.claimDevice({ serialNumber, companyId, timezone });
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to claim device");
@@ -96,7 +99,7 @@ export default function UnregisteredDevices() {
     }
   }
 
-  const emptyStateColSpan = isSuperAdmin ? 8 : 5;
+  const emptyStateColSpan = isSuperAdmin ? 9 : 6;
 
   return (
     <div>
@@ -104,9 +107,24 @@ export default function UnregisteredDevices() {
       <p className="muted">
         These serial numbers pinged /iclock/* but aren't registered as a device yet. If one arrived via your
         company's URL, that secret is captured here and carries straight into the device record when you claim it -
-        nothing to reconfigure on the device afterward. Claim one to start capturing its punches, or delete it if
-        it's just noise.
+        nothing to reconfigure on the device afterward. Pick the device's timezone before claiming (required - used
+        for accurate punch times and to tell the device itself its clock/timezone), or delete it if it's just noise.
       </p>
+
+      {user?.role === "COMPANY_ADMIN" && companies[0] && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h3 style={{ marginTop: 0 }}>Connect a device</h3>
+          <p className="muted">
+            On the device: <strong>Menu → COMM → Cloud Server Setting</strong>. Set the server address to:
+          </p>
+          <code className="mono">{`${window.location.origin}/${companies[0].slug}/<any-secret-you-choose>`}</code>
+          <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
+            Pick any secret string - it becomes that device's secret automatically once you register it, or the
+            moment it first pings it shows up right here, ready to claim.
+          </p>
+        </div>
+      )}
+
       {error && <div className="error-banner">{error}</div>}
 
       {isSuperAdmin && (
@@ -142,6 +160,7 @@ export default function UnregisteredDevices() {
                     <th>Ping count</th>
                     <th>Last seen</th>
                     {isSuperAdmin && <th>Claim into company</th>}
+                    <th>Timezone</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -195,6 +214,18 @@ export default function UnregisteredDevices() {
                           </select>
                         </td>
                       )}
+                      <td>
+                        <select
+                          value={timezoneChoice[p.serialNumber] ?? DEFAULT_TIMEZONE}
+                          onChange={(e) => setTimezoneChoice((s) => ({ ...s, [p.serialNumber]: e.target.value }))}
+                        >
+                          {TIMEZONE_OPTIONS.map((opt) => (
+                            <option key={opt.tz} value={opt.tz}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
                       <td style={{ display: "flex", gap: 6 }}>
                         <button
                           className="btn btn-sm btn-primary"

@@ -78,12 +78,14 @@ model Device {
   // IANA timezone name (e.g. "Asia/Kolkata") the device's own clock is set
   // to. Devices push wall-clock digits with no timezone info of their own
   // (see parseDeviceDatetime in src/adms/parsers/attlog.ts) - this is what
-  // lets the server work out the real UTC instant behind those digits.
-  // Nullable and opt-in: null (the default) means "unknown", and every
-  // existing punch-time behavior is completely unchanged. Setting it only
-  // affects punches ingested afterward - PunchRecord.punchTimeUtc is never
-  // retroactively backfilled for older rows.
-  timezone            String?
+  // lets the server work out the real UTC instant behind those digits, and
+  // what's sent back to the device itself in the ADMS handshake response
+  // (see computeTimeZoneOptionValue in src/adms/timezone.ts) so firmware
+  // that resets its own clock on connect gets told what it should be.
+  // Mandatory: every device must have one, required at both create and
+  // claim time - see the 20260817150000_device_timezone_required
+  // migration for the one-time backfill of devices that predate this.
+  timezone            String
 
   webhookUrl          String?
   webhookSecret       String?

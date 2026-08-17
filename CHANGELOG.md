@@ -12,6 +12,24 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.6.3] - 2026-08-17
+
+### Added
+
+- The "Connect a device" onboarding card (Cloud Server URL instructions)
+  now also shows on Unregistered Devices, not just Devices - the page a
+  new company_admin actually lands on first while waiting for their
+  device to show up.
+
+### Changed
+
+- Device timezone is now mandatory, required both when registering a
+  device directly and when claiming one from Unregistered Devices (which
+  gets its own timezone picker on the claim row now) - it's load-bearing
+  for accurate punch-time conversion and the ADMS handshake `TimeZone=`
+  fix, so "unset" was never really a safe default. Devices that existed
+  before this requirement were one-time backfilled to `Asia/Kolkata`.
+
 ## [2.6.2] - 2026-08-17
 
 ### Changed

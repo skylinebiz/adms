@@ -187,6 +187,11 @@ const claimSchema = z.object({
   serialNumber: z.string().min(1),
   companyId: z.string().min(1),
   label: z.string().optional(),
+  // Mandatory: the device secret carries over automatically from
+  // whatever the device has been pinging with, but timezone never had a
+  // source to infer from - the admin claiming it has to actually know
+  // it. See timezoneSchema for why blank/typo'd/made-up zones are rejected.
+  timezone: timezoneSchema,
 });
 
 devicesRouter.post("/claim", async (req, res) => {
@@ -245,6 +250,7 @@ devicesRouter.post("/claim", async (req, res) => {
           companyId: parsed.data.companyId,
           label: parsed.data.label,
           deviceSecret,
+          timezone: parsed.data.timezone,
         },
       });
       if (pending) {
@@ -317,9 +323,10 @@ const createSchema = z.object({
   // URL requires a secret segment, so a device with none configured could
   // never actually be reached anyway.
   deviceSecret: z.string().min(1),
-  // IANA name the device's clock is set to, e.g. "Asia/Kolkata". Left unset
-  // = unknown, punches keep today's literal-digit behavior indefinitely.
-  timezone: timezoneSchema.optional(),
+  // IANA name the device's clock is set to, e.g. "Asia/Kolkata". Mandatory -
+  // load-bearing for both accurate punch-time conversion and the ADMS
+  // handshake TimeZone= fix (see computeTimeZoneOptionValue in timezone.ts).
+  timezone: timezoneSchema,
   webhookUrl: z.string().url().optional(),
   webhookEnabled: z.boolean().optional(),
   webhookHeaders: headersSchema,
@@ -364,7 +371,9 @@ const updateSchema = z.object({
   // supports regenerate - the admin owns this value, not us. Not
   // nullable: mandatory on every device, can be changed but never cleared.
   deviceSecret: z.string().min(1).optional(),
-  timezone: timezoneSchema.nullable().optional(),
+  // Not nullable: mandatory on every device, can be changed but never
+  // cleared - same as deviceSecret above.
+  timezone: timezoneSchema.optional(),
   webhookUrl: z.string().url().nullable().optional(),
   webhookEnabled: z.boolean().optional(),
   webhookHeaders: headersSchema,
