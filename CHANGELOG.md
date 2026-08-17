@@ -12,6 +12,29 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.6.2] - 2026-08-17
+
+### Changed
+
+- Removed the `TimeZone=` line from the `getrequest` poll response
+  (added speculatively in 2.5.2). Confirmed live, on a real
+  eSSL SilkBio-101TC, that it wasn't needed: the handshake-only fix from
+  2.5.1 works fine on its own - the device just needed a power cycle to
+  re-trigger a fresh handshake. No reference ADMS implementation found
+  ever puts `TimeZone=` in a getrequest response, so this was a
+  reasonable guess that turned out to be a no-op. `getrequest` is back
+  to its pre-2.5.2 shape: queued-command delivery only.
+
+### Confirmed
+
+- The `TimeZone=` handshake field (2.5.1) is now confirmed working live
+  on real hardware, including the fractional-minutes encoding for
+  half-hour zones like IST (`330`) - previously flagged as an unverified
+  guess. See "Telling the device its own timezone" in the README,
+  including the power-cycle note: some firmware only re-runs the
+  handshake on boot/reconnect, so a newly-set timezone may not reach the
+  device until then.
+
 ## [2.6.1] - 2026-08-17
 
 ### Fixed

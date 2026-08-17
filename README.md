@@ -464,28 +464,33 @@ server-side (`isValidTimeZone`) — a typo or made-up zone is rejected with a
 Some firmware (observed on an eSSL-branded SilkBio-101TC) resets its own
 clock the instant it gets network connectivity, with no on-device setting
 to stop it — the device's own clock ends up wrong even though this server's
-records stay correct. If a device's `timezone` is set, both the handshake
-response (`GET /iclock/cdata`) *and* the poll response (`GET
-/iclock/getrequest`) now include a `TimeZone=<value>` line telling the
-device what its clock/timezone should actually be — this mirrors a real
-field in the ADMS PUSH protocol (confirmed working against the [reference
-project](https://github.com/saifulcoder/adms-server-ZKTeco) this codebase
-mirrors protocol behavior from, which ships that exact field commented out
-by default). It's sent from both endpoints because some firmware barely
-ever repeats the full handshake once running, living almost entirely in
-the getrequest poll loop instead - relying on the handshake alone could
-mean the device never actually sees it. Sent on every poll, not once, so
-a device whose clock drifts again for any reason self-corrects within one
-poll cycle. No line is sent from either endpoint for a device with no
-timezone configured.
+records stay correct. If a device's `timezone` is set, the handshake
+response (`GET /iclock/cdata`) includes a `TimeZone=<value>` line telling
+the device what its clock/timezone should actually be — this mirrors a
+real field in the ADMS PUSH protocol (confirmed working, live, against a
+real SilkBio-101TC, and matches every reference ADMS implementation found
+- e.g. the [reference project](https://github.com/saifulcoder/adms-server-ZKTeco)
+this codebase mirrors protocol behavior from, which ships that exact field
+commented out by default). No line is sent for a device with no timezone
+configured.
 
-The value's encoding is unavoidably a best-effort guess (there's no single
-authoritative spec): a whole-hour offset is sent as a plain signed hour
-integer (e.g. `7` for GMT+7 — this is the form with confirmed field
-reports); a fractional offset (e.g. IST's `+05:30`, Nepal's `+05:45`) is
-sent as total signed minutes (e.g. `330`) — unverified against real
-hardware, since no documentation was found confirming a fractional-hour
-form. See `computeTimeZoneOptionValue` in `src/adms/timezone.ts`.
+**This only takes effect on a fresh handshake** — some firmware, this
+SilkBio included, barely repeats the full `GET /iclock/cdata` handshake
+once it's up and running, living almost entirely in the `/iclock/getrequest`
+poll loop instead (confirmed: no reference implementation found ever puts
+`TimeZone=` in a getrequest response, and adding it there had no effect on
+real hardware - see [CHANGELOG.md](CHANGELOG.md) 2.5.2/2.6.2). So setting
+or changing a device's timezone may not reach it until its next fresh
+handshake - **power-cycling the device is the reliable way to force one.**
+
+The value's encoding is confirmed working on real hardware for both cases:
+a whole-hour offset is sent as a plain signed hour integer (e.g. `7` for
+GMT+7); a fractional offset (e.g. IST's `+05:30`, Nepal's `+05:45`) is
+sent as total signed minutes (e.g. `330`) — confirmed live against a real
+SilkBio-101TC set to `Asia/Kolkata`. No single authoritative spec exists
+for this field, so this encoding was inferred from field reports and then
+verified directly on hardware. See `computeTimeZoneOptionValue` in
+`src/adms/timezone.ts`.
 
 ## Device online/offline status
 
