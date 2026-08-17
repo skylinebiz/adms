@@ -4,6 +4,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/client";
 import { config } from "../config";
+import { appLogger as logger } from "../logger";
 import { requireSuperAdmin, resolveCompanyScope } from "../middleware/requireAdminAuth";
 import { dispatchWebhook, renderPunchWebhookBody } from "../webhooks/dispatcher";
 import { renderHeaders, SAMPLE_TEMPLATE_VARS } from "../webhooks/template";
@@ -67,7 +68,7 @@ function toDeviceListItem(device: {
   webhookUrl: string | null;
   webhookSecret: string | null;
   webhookEnabled: boolean;
-  deviceSecret: string | null;
+  deviceSecret: string;
   timezone: string | null;
   createdAt: Date;
 }) {
@@ -222,6 +223,19 @@ devicesRouter.post("/claim", async (req, res) => {
     return;
   }
 
+  // deviceSecret is mandatory on Device now, but PendingDevice.secret is
+  // still nullable (e.g. a stale pre-migration row, or some future path
+  // that creates one without a secret) - fall back to a fresh random
+  // secret rather than fail the claim outright. The admin can see/change
+  // it immediately in the device's edit drawer either way.
+  if (!pending?.secret) {
+    logger.warn(
+      { serialNumber: parsed.data.serialNumber },
+      "claiming a pending device with no captured secret - generating one"
+    );
+  }
+  const deviceSecret = pending?.secret ?? crypto.randomBytes(24).toString("hex");
+
   const device = await prisma
     .$transaction(async (tx) => {
       const created = await tx.device.create({
@@ -229,7 +243,7 @@ devicesRouter.post("/claim", async (req, res) => {
           serialNumber: parsed.data.serialNumber,
           companyId: parsed.data.companyId,
           label: parsed.data.label,
-          deviceSecret: pending?.secret ?? null,
+          deviceSecret,
         },
       });
       if (pending) {
@@ -298,8 +312,10 @@ const createSchema = z.object({
   label: z.string().optional(),
   // Unlike webhookSecret (system-generated only), this is whatever the
   // admin plans to put in the device's own Cloud Server URL - they own the
-  // value, we just store and compare it. Left blank = open/legacy for now.
-  deviceSecret: z.string().min(1).optional(),
+  // value, we just store and compare it. Mandatory: every device-facing
+  // URL requires a secret segment, so a device with none configured could
+  // never actually be reached anyway.
+  deviceSecret: z.string().min(1),
   // IANA name the device's clock is set to, e.g. "Asia/Kolkata". Left unset
   // = unknown, punches keep today's literal-digit behavior indefinitely.
   timezone: timezoneSchema.optional(),
@@ -343,9 +359,10 @@ devicesRouter.post("/", async (req, res) => {
 
 const updateSchema = z.object({
   label: z.string().optional(),
-  // Direct edit (view/copy/overwrite/clear), unlike webhookSecret which
-  // only supports regenerate - the admin owns this value, not us.
-  deviceSecret: z.string().min(1).nullable().optional(),
+  // Direct edit (view/copy/overwrite), unlike webhookSecret which only
+  // supports regenerate - the admin owns this value, not us. Not
+  // nullable: mandatory on every device, can be changed but never cleared.
+  deviceSecret: z.string().min(1).optional(),
   timezone: timezoneSchema.nullable().optional(),
   webhookUrl: z.string().url().nullable().optional(),
   webhookEnabled: z.boolean().optional(),

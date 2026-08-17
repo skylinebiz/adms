@@ -86,7 +86,9 @@ export interface Device {
   webhookEnabled: boolean;
   webhookHeaders?: Record<string, string> | null;
   webhookBodyTemplate?: unknown | null;
-  deviceSecret?: string | null;
+  // Absent in list responses (masked out); when present (detail view),
+  // always a real string - mandatory on every device now.
+  deviceSecret?: string;
   timezone?: string | null;
   createdAt: string;
   company?: { id: string; name: string; slug: string };
@@ -209,7 +211,7 @@ export const api = {
     companyId: string;
     serialNumber: string;
     label?: string;
-    deviceSecret?: string;
+    deviceSecret: string;
     timezone?: string;
     webhookUrl?: string;
     webhookEnabled?: boolean;
@@ -220,7 +222,7 @@ export const api = {
     id: string,
     data: Partial<{
       label: string;
-      deviceSecret: string | null;
+      deviceSecret: string;
       timezone: string | null;
       webhookUrl: string | null;
       webhookEnabled: boolean;

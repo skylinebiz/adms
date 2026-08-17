@@ -24,15 +24,10 @@ export async function touchDevice(deviceId: string) {
 }
 
 // Pure decision: does this request's path secret satisfy the device's
-// configured secret? `deviceSecret: null` means "never secured" - fully
-// open regardless of what (if anything) the path carried. Otherwise the
-// path secret must match exactly; a plain-path request (secretFromPath
-// undefined) against a secured device is never trusted.
-export function isDeviceRequestTrusted(
-  deviceSecret: string | null,
-  secretFromPath: string | undefined
-): boolean {
-  if (deviceSecret === null) return true;
+// configured secret? Every device now has a mandatory secret (see
+// Device.deviceSecret) - this is a plain exact match, no "unsecured -
+// trust anything" case left to handle.
+export function isDeviceRequestTrusted(deviceSecret: string, secretFromPath: string | undefined): boolean {
   return deviceSecret === secretFromPath;
 }
 

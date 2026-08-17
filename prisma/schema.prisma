@@ -69,11 +69,14 @@ model Device {
   lastSeenAt     DateTime?
 
   // Path secret the device's own Cloud Server URL is configured with
-  // (`http://host:port/<deviceSecret>`, firmware appends /iclock/... after
-  // that). Not required to be globally unique - lookup is always by SN,
-  // this only validates the request against the SN it claims. null means
-  // "never secured" and stays fully open on the legacy plain /iclock path.
-  deviceSecret        String?
+  // (`http://host:port/<companySlug>/<deviceSecret>`, firmware appends
+  // /iclock/... after that). Not required to be globally unique - lookup
+  // is always by SN, this only validates the request against the SN it
+  // claims. Mandatory: every device-facing URL requires a secret segment
+  // structurally (there's no bare/legacy path anymore), so every Device
+  // row has one too - see isDeviceRequestTrusted in deviceLookup.ts, which
+  // no longer has a "no secret configured" case to handle.
+  deviceSecret        String
 
   // IANA timezone name (e.g. "Asia/Kolkata") the device's own clock is set
   // to. Devices push wall-clock digits with no timezone info of their own

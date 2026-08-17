@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { isDeviceRequestTrusted } from "../src/adms/deviceLookup";
 
+// deviceSecret is mandatory on every Device now (no more "never secured -
+// trust anything" branch), so there's no null-secret case left to cover.
 describe("isDeviceRequestTrusted", () => {
-  it("trusts any request (even with no secret) when the device was never secured", () => {
-    expect(isDeviceRequestTrusted(null, undefined)).toBe(true);
-    expect(isDeviceRequestTrusted(null, "anything")).toBe(true);
-  });
-
   it("trusts a request whose path secret matches the device's secret exactly", () => {
     expect(isDeviceRequestTrusted("abc123", "abc123")).toBe(true);
   });

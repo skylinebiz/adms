@@ -227,7 +227,7 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
           companyId,
           serialNumber,
           label: label || undefined,
-          deviceSecret: deviceSecret || undefined,
+          deviceSecret,
           timezone: timezone || undefined,
           webhookUrl: webhookUrl || undefined,
           webhookEnabled,
@@ -237,7 +237,7 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
       } else if (deviceId) {
         await api.updateDevice(deviceId, {
           label,
-          deviceSecret: deviceSecret || null,
+          deviceSecret,
           timezone: timezone || null,
           webhookUrl: webhookUrl || null,
           webhookEnabled,
@@ -360,15 +360,11 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
           <div className="field">
             <label>Device secret</label>
             <div className="muted" style={{ marginBottom: 6 }}>
-              Whatever you put in this device's own COMM → Cloud Server Setting URL. Once set, any request claiming
+              Required - whatever you put in this device's own COMM → Cloud Server Setting URL. Any request claiming
               this device's serial number without the matching secret is rejected outright.
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <input
-                value={deviceSecret}
-                onChange={(e) => setDeviceSecret(e.target.value)}
-                placeholder="(unsecured - open on the legacy URL)"
-              />
+              <input value={deviceSecret} onChange={(e) => setDeviceSecret(e.target.value)} required />
               <button type="button" className="btn btn-sm" onClick={() => setDeviceSecret(generateRandomSecret())}>
                 Generate
               </button>
