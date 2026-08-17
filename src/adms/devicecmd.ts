@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../db/client";
 import { deviceLogger } from "../logger";
-import { resolveDevice, sendRejected, touchDevice } from "./deviceLookup";
+import { resolveDevice, sendRejected, sendUnclaimed, touchDevice } from "./deviceLookup";
 
 // POST /iclock/devicecmd?SN=... - device reports command execution result.
 // Body is typically "ID=<commandId>&Return=<code>&CMD=<...>" as query-string-style text.
@@ -12,7 +12,12 @@ export async function handleDeviceCmd(req: Request, res: Response) {
 
   const { device, trusted } = await resolveDevice(req, body);
   if (!device) {
-    res.status(200).type("text/plain; charset=UTF-8").send("OK");
+    // Data-bearing (the device's own command-execution report), same as
+    // cdata POST - withhold the ack (503) rather than silently discard it.
+    // In practice an unclaimed device has no DeviceCommand rows to ack in
+    // the first place (nothing has ever been queued for it), so this is
+    // mostly defensive consistency with cdata POST's policy.
+    sendUnclaimed(res);
     return;
   }
   if (!trusted) {

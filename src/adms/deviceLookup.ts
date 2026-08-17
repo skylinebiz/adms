@@ -3,12 +3,27 @@ import { Device } from "@prisma/client";
 import { prisma } from "../db/client";
 import { deviceLogger } from "../logger";
 
-// The one deliberate exception to this codebase's "always ack OK" rule: a
+// A deliberate exception to this codebase's "always ack OK" rule: a
 // request for an already-registered device with a missing/invalid secret
 // is a real rejection, not a soft drop. Never call this for the
-// still-unregistered/pending case - that one always acks OK.
+// still-unregistered/pending case - see sendUnclaimed below for that one.
 export function sendRejected(res: Response) {
   res.status(401).type("text/plain; charset=UTF-8").send("Unauthorized");
+}
+
+// The other deliberate exception: a *data-bearing* request (a punch batch,
+// a devicecmd ack) for an SN that isn't a registered Device yet. Acking OK
+// here would mean silently discarding whatever data came with the request
+// forever - once a device is later claimed, only *new* data from that
+// point on gets processed, so there's no way to recover this after the
+// fact. 503 tells the device (accurately) "try again later" - it stays
+// true until an admin claims it, and the device backs off and retries on
+// its own schedule. Never call this for the registration/discovery flow
+// (GET cdata handshake, getrequest, test) - those keep acking OK
+// unconditionally so an unclaimed device stays in a healthy poll loop and
+// keeps re-announcing itself instead of possibly giving up entirely.
+export function sendUnclaimed(res: Response) {
+  res.status(503).type("text/plain; charset=UTF-8").send("Service Unavailable");
 }
 
 export async function findDeviceBySerial(serialNumber: string) {
@@ -160,18 +175,18 @@ export interface DeviceResolution {
 //     SN + whatever secret arrived, plus the company resolved from the
 //     URL's slug segment if any (PendingDevice upsert; a raw
 //     UnregisteredDevicePing row too, but only on genuine first contact -
-//     see upsertPendingDevice's isNew), and always resolves as untrusted;
-//     callers must still ack `OK` for this case (unchanged "always ack OK"
-//     convention for the unregistered/pending flow). The company slug
-//     never affects trust for an already-registered device below - only
-//     SN + per-device secret do.
-//   - Device found, deviceSecret null -> never secured, trusted.
-//   - Device found, deviceSecret set and matches the path secret -> trusted.
-//   - Device found, deviceSecret set and missing/mismatched -> NOT trusted.
-//     Callers must reject this outright (401), not ack OK - this is the one
-//     exception to the "always ack OK" convention, since it protects a
-//     real, already-registered device rather than a device still finding
-//     its feet.
+//     see upsertPendingDevice's isNew), and always resolves as untrusted.
+//     The company slug never affects trust for an already-registered
+//     device below - only SN + per-device secret do. Callers on the
+//     registration/discovery flow (handshake, getrequest, test) still ack
+//     `OK` unconditionally for this case; callers on a data-bearing
+//     endpoint (a punch batch, a devicecmd ack) must withhold the ack
+//     instead - see sendUnclaimed.
+//   - Device found, secret matches the path -> trusted.
+//   - Device found, secret missing/mismatched -> NOT trusted. Callers must
+//     reject this outright (401, sendRejected), not ack OK - this protects
+//     a real, already-registered device rather than one still finding its
+//     feet.
 export async function resolveDevice(req: Request, rawBody?: string): Promise<DeviceResolution> {
   const sn = String(req.query.SN ?? "");
   const secretFromPath = req.params.secret as string | undefined;

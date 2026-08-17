@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/client";
 import { deviceLogger } from "../logger";
-import { resolveDevice, sendRejected, touchDevice } from "./deviceLookup";
+import { resolveDevice, sendRejected, sendUnclaimed, touchDevice } from "./deviceLookup";
 import { parseAttlogBody } from "./parsers/attlog";
 import { logDeviceRawData } from "./rawLog";
 import { zonedWallClockToUtc } from "./timezone";
@@ -187,8 +187,11 @@ export async function handleCdataPost(req: Request, res: Response) {
   const { device, trusted } = await resolveDevice(req, body);
   if (!device) {
     // Still-unregistered/pending SN, already captured inside resolveDevice.
-    // Ack so the device doesn't hammer retries for an SN we can't map yet.
-    sendPlainText(res, OK);
+    // This is data-bearing (a punch/OPERLOG/etc batch), unlike the
+    // handshake - withhold the ack (503) so the device retries once an
+    // admin claims it, instead of clearing its buffer and losing this
+    // batch for good.
+    sendUnclaimed(res);
     return;
   }
 
