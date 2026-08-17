@@ -69,13 +69,21 @@ admsRouter.use(express.text({ type: "*/*", limit: config.admsMaxBodySize }));
 // endpoints/tables the handlers below don't otherwise understand.
 admsRouter.use(logRawRequest);
 
-admsRouter.get("/cdata", asyncHandler(handleCdataGet));
-admsRouter.post("/cdata", asyncHandler(handleCdataPost));
-admsRouter.get("/getrequest", asyncHandler(handleGetRequest));
-admsRouter.post("/devicecmd", asyncHandler(handleDeviceCmd));
+// Every route is registered under both its bare name and a .aspx-suffixed
+// variant: ZKTeco-branded firmware calls /iclock/cdata, but eSSL-branded
+// builds of the same firmware (their ADMS server, WDMS, is ASP.NET-based)
+// bake in /iclock/cdata.aspx etc. - observed live from a SilkBio-101TC
+// (Ver 8.0.4.6-20211110). Same protocol, same payloads, three extra
+// characters of path.
+const withAspx = (path: string) => [path, `${path}.aspx`];
+
+admsRouter.get(withAspx("/cdata"), asyncHandler(handleCdataGet));
+admsRouter.post(withAspx("/cdata"), asyncHandler(handleCdataPost));
+admsRouter.get(withAspx("/getrequest"), asyncHandler(handleGetRequest));
+admsRouter.post(withAspx("/devicecmd"), asyncHandler(handleDeviceCmd));
 // handleTest is synchronous (never touches the DB) - no async wrapping needed.
-admsRouter.get("/test", handleTest);
-admsRouter.post("/test", handleTest);
+admsRouter.get(withAspx("/test"), handleTest);
+admsRouter.post(withAspx("/test"), handleTest);
 
 interface PayloadTooLargeError {
   type?: string;

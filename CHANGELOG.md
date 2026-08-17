@@ -12,6 +12,17 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.5.0] - 2026-08-17
+
+### Added
+
+- Support for eSSL-firmware devices, which call the ADMS endpoints with
+  an `.aspx` suffix (`/iclock/cdata.aspx`, `/iclock/getrequest.aspx`,
+  ...) because eSSL's own ADMS server is ASP.NET-based. Every device
+  route now accepts both the bare and `.aspx`-suffixed spelling -
+  observed live from a SilkBio-101TC that was 404ing on every ping while
+  an equivalent ZKTeco-branded unit worked. Same protocol otherwise.
+
 ## [2.4.1] - 2026-08-17
 
 ### Fixed
