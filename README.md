@@ -452,9 +452,13 @@ Edit:
   number, not the string `"0"`); a placeholder embedded in a longer string
   (`"Punch by {{pin}}"`) is stringified and interpolated in place. Available
   placeholders: `pin`, `punch_time`, `punch_time_unix`, `punch_time_utc`,
-  `device_timezone`, `status`, `verify_mode`, `work_code`, `device_id`,
-  `device_serial`, `company_id`, `company_name`, `received_at`. Leaving
-  this off falls back to the default `punch.created` shape above.
+  `device_timezone`, `punch_time_frappe`, `status`, `verify_mode`,
+  `work_code`, `device_id`, `device_serial`, `company_id`, `company_name`,
+  `received_at`. Leaving this off falls back to the default `punch.created`
+  shape above. `punch_time_frappe` is `punch_time`'s same digits formatted
+  as `"YYYY-MM-DD HH:mm:ss.000000"` — the naive-timestamp string
+  Frappe/ERPNext's REST API expects (see [Webhook
+  templates](#webhook-templates) below), not generally useful elsewhere.
 
 Example custom body template:
 
@@ -472,6 +476,52 @@ record) to whatever URL/headers/body template are currently in the form —
 including unsaved edits — so you can verify the receiving endpoint's shape
 and auth before going live. It never writes a `PunchRecord` or
 `WebhookDelivery` row; it's a pure connectivity/shape check.
+
+### Webhook templates
+
+Above the URL field, a **"Use a template"** picker offers hardcoded
+presets for common downstream systems — selecting one prefills the URL,
+headers, and body template fields (flipping on "Use a custom request
+body" if needed) with real `{{placeholder}}` tokens already wired in.
+Everything prefilled stays fully editable; the only things left for you
+to fill in are ALL-CAPS placeholder text like `YOUR_API_KEY` — your own
+site URL, tokens, and secrets, which obviously can't be known in advance.
+Picking "Custom (enter everything manually)" leaves the fields exactly as
+they were, for anyone who'd rather not use a template at all.
+
+Templates are **hardcoded in code, not configurable from the admin UI** —
+add a new one by creating a file under `src/webhooks/templates/` (see
+`erpnext.ts` for the shape: `id`, `name`, `description`, `urlPlaceholder`,
+`headers`, `bodyTemplate`, `helpText`) and listing it in that directory's
+`index.ts`. The admin UI just reads whatever's registered there via
+`GET /api/admin/webhook-templates`.
+
+**ERPNext / Frappe HR — Employee Checkin** (the only template for now)
+logs every punch as an Employee Checkin via ERPNext's
+`add_log_based_on_employee_field` push API
+([official docs](https://docs.frappe.io/erpnext/integrating-erpnext-with-biometric-attendance-devices)).
+To use it:
+
+1. In ERPNext: your user → **Settings → API Access → Generate Keys** to
+   get an API Key and API Secret.
+2. In this app's device drawer: pick the template, then replace
+   `YOUR-SITE` (your ERPNext site's domain) and `YOUR_API_KEY` /
+   `YOUR_API_SECRET` (from step 1) in the prefilled URL and
+   `Authorization` header. The header uses Frappe's own token format
+   (`token <api_key>:<api_secret>`), not Bearer or Basic auth.
+3. In ERPNext, on each employee's record, set **Attendance Device ID**
+   (Employee doctype) to that person's PIN on *this* device — that's the
+   field `employee_field_value` (`{{pin}}`) is matched against, and it's
+   not the same thing as their ERPNext employee ID.
+4. If your ERPNext predates the separate HRMS app (pre-v14-ish), change
+   `hrms` to `erpnext` in the prefilled URL.
+
+The prefilled body sends `log_type: "Auto"`, letting ERPNext infer IN/OUT
+by alternating, since this device's actual IN/OUT status-code convention
+isn't something a generic template can know — change it to `"IN"` /
+`"OUT"` (or bind it to `{{status}}`) once you know your device's
+convention. Use **Send test webhook** to confirm the connection and
+credentials before relying on it for real punches.
 
 ## Device timezone and accurate UTC timestamps
 

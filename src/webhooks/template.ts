@@ -24,6 +24,14 @@ export interface PunchTemplateVars {
   // null if unset. Lets a receiver display punch_time_utc back in the
   // device's own local time without having to know it out of band.
   device_timezone: string | null;
+  // punch_time's same literal digits (the device's wall-clock reading,
+  // not a real UTC instant - see parseDeviceDatetime), reformatted as
+  // "YYYY-MM-DD HH:mm:ss.000000" - the naive-datetime-with-microseconds
+  // string Frappe/ERPNext's REST API expects (e.g. for Employee
+  // Checkin's `timestamp` field). Exists specifically for the ERPNext
+  // webhook template (src/webhooks/templates/erpnext.ts) but usable by
+  // any custom template targeting a Frappe-framework app.
+  punch_time_frappe: string;
   status: number;
   verify_mode: number;
   work_code: string | null;
@@ -40,6 +48,7 @@ export const PLACEHOLDER_NAMES: (keyof PunchTemplateVars)[] = [
   "punch_time_unix",
   "punch_time_utc",
   "device_timezone",
+  "punch_time_frappe",
   "status",
   "verify_mode",
   "work_code",
@@ -102,6 +111,7 @@ export const SAMPLE_TEMPLATE_VARS: PunchTemplateVars = {
   punch_time_unix: 1722130524,
   punch_time_utc: "2024-07-27T19:55:24.000Z",
   device_timezone: "Asia/Kolkata",
+  punch_time_frappe: "2024-07-28 01:25:24.000000",
   status: 0,
   verify_mode: 1,
   work_code: null,

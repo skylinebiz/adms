@@ -12,6 +12,31 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.8.0] - 2026-08-17
+
+### Added
+
+- Hardcoded webhook templates: a "Use a template" picker in the device
+  drawer's webhook section prefills URL, headers, and body template for
+  common downstream systems, using the existing custom-headers/body
+  machinery - everything prefilled stays fully editable, and only
+  ALL-CAPS placeholder text (site URL, API key/secret) is left for the
+  user to fill in. Code-only for now, not configurable from the admin UI:
+  add a new template by creating a file under `src/webhooks/templates/`
+  and listing it in that directory's `index.ts`; the UI reads whatever's
+  registered there via the new `GET /api/admin/webhook-templates`.
+- First (and for now only) template: **ERPNext / Frappe HR — Employee
+  Checkin**, wired to the real `add_log_based_on_employee_field` push API
+  (Frappe token-auth header, `employee_field_value`/`timestamp`/
+  `device_id`/`log_type` body, `hrms` vs `erpnext` app-name note for
+  older ERPNext versions) - see "Webhook templates" in the README for
+  full setup steps.
+- New `punch_time_frappe` placeholder: `punch_time`'s same digits
+  formatted as `"YYYY-MM-DD HH:mm:ss.000000"`, the naive-timestamp string
+  Frappe/ERPNext's REST API expects (`punch_time` itself is ISO8601,
+  which Frappe doesn't accept for this field). Available in any custom
+  body template, not just the ERPNext one.
+
 ## [2.7.0] - 2026-08-17
 
 ### Added

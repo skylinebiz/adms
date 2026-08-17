@@ -17,6 +17,22 @@ export interface PunchWebhookPayload {
   received_at: string;
 }
 
+// "YYYY-MM-DD HH:mm:ss.000000" from punchTime's own UTC-getter fields (the
+// device's literal wall-clock digits, per parseDeviceDatetime - not a real
+// instant, same source as punch_time). Deliberately not derived from
+// punchTimeUtc: Frappe treats a naive timestamp like this as being in the
+// receiving site's own configured timezone, and the common case for this
+// template is a device and an ERPNext site in the same timezone - reusing
+// the literal digits matches that, and doesn't require a device timezone
+// to be configured at all (punchTimeUtc would be null without one).
+function formatFrappeTimestamp(punchTime: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${punchTime.getUTCFullYear()}-${pad(punchTime.getUTCMonth() + 1)}-${pad(punchTime.getUTCDate())} ` +
+    `${pad(punchTime.getUTCHours())}:${pad(punchTime.getUTCMinutes())}:${pad(punchTime.getUTCSeconds())}.000000`
+  );
+}
+
 export function buildTemplateVars(
   punch: Pick<PunchRecord, "devicePin" | "punchTime" | "punchTimeUtc" | "status" | "verifyMode" | "workCode" | "receivedAt">,
   device: Pick<Device, "id" | "companyId" | "serialNumber" | "timezone">,
@@ -28,6 +44,7 @@ export function buildTemplateVars(
     punch_time_unix: Math.floor(punch.punchTime.getTime() / 1000),
     punch_time_utc: punch.punchTimeUtc ? punch.punchTimeUtc.toISOString() : null,
     device_timezone: device.timezone ?? null,
+    punch_time_frappe: formatFrappeTimestamp(punch.punchTime),
     status: punch.status,
     verify_mode: punch.verifyMode,
     work_code: punch.workCode,

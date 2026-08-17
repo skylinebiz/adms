@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { api, ApiError, CompanyOption, Device, DeviceCommandLog, TestWebhookResult } from "../api";
+import { api, ApiError, CompanyOption, Device, DeviceCommandLog, TestWebhookResult, WebhookTemplate } from "../api";
 import { DEFAULT_TIMEZONE, TIMEZONE_OPTIONS } from "../utils/timezoneOptions";
 
 interface Props {
@@ -22,6 +22,7 @@ const PLACEHOLDERS = [
   "punch_time_unix",
   "punch_time_utc",
   "device_timezone",
+  "punch_time_frappe",
   "status",
   "verify_mode",
   "work_code",
@@ -99,6 +100,25 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
   const [commandError, setCommandError] = useState<string | null>(null);
   const [commands, setCommands] = useState<DeviceCommandLog[]>([]);
   const [loadingCommands, setLoadingCommands] = useState(false);
+
+  const [webhookTemplates, setWebhookTemplates] = useState<WebhookTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+
+  useEffect(() => {
+    api.listWebhookTemplates().then(({ templates }) => setWebhookTemplates(templates));
+  }, []);
+
+  function onSelectTemplate(id: string) {
+    setSelectedTemplateId(id);
+    if (!id) return; // "Custom" - leave whatever's currently in the fields alone.
+    const tmpl = webhookTemplates.find((t) => t.id === id);
+    if (!tmpl) return;
+    setWebhookUrl(tmpl.urlPlaceholder);
+    setHeaderRows(headersToRows(tmpl.headers));
+    setUseCustomBody(true);
+    setBodyTemplateText(JSON.stringify(tmpl.bodyTemplate, null, 2));
+    setBodyTemplateError(null);
+  }
 
   function loadCommands() {
     if (!deviceId) return;
@@ -350,6 +370,40 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
               ))}
             </select>
           </div>
+
+          {webhookTemplates.length > 0 && (
+            <div className="field">
+              <label>Use a template</label>
+              <select value={selectedTemplateId} onChange={(e) => onSelectTemplate(e.target.value)}>
+                <option value="">Custom (enter everything manually)</option>
+                {webhookTemplates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              {selectedTemplateId && (
+                <div className="card" style={{ marginTop: 8, fontSize: 12 }}>
+                  {(() => {
+                    const tmpl = webhookTemplates.find((t) => t.id === selectedTemplateId);
+                    if (!tmpl) return null;
+                    return (
+                      <>
+                        <div>{tmpl.description}</div>
+                        <div className="muted" style={{ marginTop: 6 }}>
+                          {tmpl.helpText}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+              <div className="muted" style={{ marginTop: 6 }}>
+                Prefills the URL, headers, and body template below - all still fully editable. Replace the ALL-CAPS
+                placeholder text (your site URL, API key, etc.) with your real values before saving.
+              </div>
+            </div>
+          )}
 
           <div className="field">
             <label>Webhook URL</label>

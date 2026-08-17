@@ -140,6 +140,16 @@ export interface RawRequestLog {
   createdAt: string;
 }
 
+export interface WebhookTemplate {
+  id: string;
+  name: string;
+  description: string;
+  urlPlaceholder: string;
+  headers: Record<string, string>;
+  bodyTemplate: unknown;
+  helpText: string;
+}
+
 export interface TestWebhookResult {
   sentBody: unknown;
   sentHeaders: Record<string, string>;
@@ -283,6 +293,7 @@ export const api = {
   sendDeviceCommand: (deviceId: string, command: string) =>
     post<{ command: DeviceCommandLog }>(`/devices/${deviceId}/commands`, { command }),
   listDeviceCommands: (deviceId: string) => get<{ commands: DeviceCommandLog[] }>(`/devices/${deviceId}/commands`),
+  listWebhookTemplates: () => get<{ templates: WebhookTemplate[] }>("/webhook-templates"),
 
   listRawRequests: (params: { serialNumber?: string; endpoint?: string } & PageParams = {}) =>
     get<{ requests: RawRequestLog[] } & Paginated<RawRequestLog>>(
