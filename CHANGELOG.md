@@ -12,6 +12,21 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.6.4] - 2026-08-17
+
+### Fixed
+
+- The default timezone picker (in both the device create form and the
+  Unregistered Devices claim row, added in 2.6.3) was hardcoded to
+  `"Asia/Kolkata"`, but that name is an IANA alias of the canonical
+  `"Asia/Calcutta"` - depending on the ICU version bundled with the
+  browser/Node runtime, `Intl.supportedValuesOf("timeZone")` may only
+  return one of the two. A default that doesn't match any real `<option>`
+  silently falls back to the browser's default (the first item in the
+  list, nowhere near IST) instead of erroring - caught live while
+  verifying the claim flow: the picker showed `Pacific/Midway` selected.
+  Now resolved dynamically against the actual option list.
+
 ## [2.6.3] - 2026-08-17
 
 ### Added
