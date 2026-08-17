@@ -35,8 +35,8 @@ adminUsersRouter.get("/", async (req, res) => {
   }
   const { page, pageSize } = parsedQuery.data;
 
-  const companyId = resolveCompanyScope(req, req.query.companyId as string | undefined);
-  const where = companyId ? { companyId } : req.adminUser!.role === "SUPER_ADMIN" ? {} : { companyId: "__none__" };
+  const scope = resolveCompanyScope(req, req.query.companyId as string | undefined);
+  const where = scope.all ? {} : { companyId: scope.companyId };
 
   const [users, total] = await Promise.all([
     prisma.adminUser.findMany({
@@ -105,6 +105,26 @@ adminUsersRouter.patch("/:id", requireSuperAdmin, async (req, res) => {
     res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
     return;
   }
+
+  const existing = await prisma.adminUser.findUnique({ where: { id: req.params.id } });
+  if (!existing) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  // Validate the *resulting* state, not just the patch in isolation - a
+  // request could leave role untouched (already COMPANY_ADMIN) while
+  // clearing companyId, or set role to COMPANY_ADMIN while companyId stays
+  // unset. Either produces a company_admin session with no company, which
+  // requireAdminAuth now rejects outright - better to reject the edit here
+  // with a clear 400 than let the admin end up locked out.
+  const nextRole = parsed.data.role ?? existing.role;
+  const nextCompanyId = "companyId" in parsed.data ? parsed.data.companyId : existing.companyId;
+  if (nextRole === "COMPANY_ADMIN" && !nextCompanyId) {
+    res.status(400).json({ error: "companyId is required for company_admin role" });
+    return;
+  }
+
   const user = await prisma.adminUser
     .update({ where: { id: req.params.id }, data: parsed.data })
     .catch(() => null);

@@ -98,7 +98,8 @@ function toDeviceListItem(device: {
 // theirs. The unscoped bucket (a typo'd/unresolved slug -
 // PendingDevice.companyId null) isn't attributable to any one company, so
 // it stays super_admin-only: resolveCompanyScope forces a company_admin's
-// query to their own companyId, which a `null` row can never match.
+// query to their own companyId (never "all"), which a `null` row can
+// never match.
 devicesRouter.get("/unregistered-pings", async (req, res) => {
   const parsedQuery = paginationQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
@@ -107,8 +108,8 @@ devicesRouter.get("/unregistered-pings", async (req, res) => {
   }
   const { page, pageSize } = parsedQuery.data;
 
-  const companyId = resolveCompanyScope(req, req.query.companyId as string | undefined);
-  const where = companyId ? { companyId } : undefined;
+  const scope = resolveCompanyScope(req, req.query.companyId as string | undefined);
+  const where = scope.all ? undefined : { companyId: scope.companyId };
 
   const [pending, total] = await Promise.all([
     prisma.pendingDevice.findMany({
@@ -170,9 +171,9 @@ devicesRouter.post("/unregistered-pings/delete-bulk", requireSuperAdmin, async (
 // Lightweight, capped (not fully paginated) list for populating <select>
 // dropdowns, where you want "all devices" rather than one page of them.
 devicesRouter.get("/options", async (req, res) => {
-  const companyId = resolveCompanyScope(req, req.query.companyId as string | undefined);
+  const scope = resolveCompanyScope(req, req.query.companyId as string | undefined);
   const devices = await prisma.device.findMany({
-    where: companyId ? { companyId } : undefined,
+    where: scope.all ? undefined : { companyId: scope.companyId },
     orderBy: [{ label: "asc" }, { serialNumber: "asc" }],
     take: OPTIONS_LIMIT,
     select: { id: true, serialNumber: true, label: true, companyId: true },
@@ -258,8 +259,8 @@ devicesRouter.get("/", async (req, res) => {
   }
   const { page, pageSize } = parsedQuery.data;
 
-  const companyId = resolveCompanyScope(req, req.query.companyId as string | undefined);
-  const where = companyId ? { companyId } : undefined;
+  const scope = resolveCompanyScope(req, req.query.companyId as string | undefined);
+  const where = scope.all ? undefined : { companyId: scope.companyId };
 
   const [devices, total] = await Promise.all([
     prisma.device.findMany({

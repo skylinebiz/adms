@@ -93,10 +93,10 @@ async function buildScopedWhere(req: import("express").Request, extra: Prisma.Pu
   const parsed = listQuerySchema.safeParse(req.query);
   if (!parsed.success) return { ok: false, error: parsed.error } as const;
 
-  const companyId = resolveCompanyScope(req, parsed.data.companyId);
+  const scope = resolveCompanyScope(req, parsed.data.companyId);
 
   const conditions: Prisma.PunchRecordWhereInput[] = [extra, statusCondition(parsed.data.status)];
-  if (companyId) conditions.push({ device: { companyId } });
+  if (!scope.all) conditions.push({ device: { companyId: scope.companyId } });
   if (parsed.data.deviceId) conditions.push({ deviceId: parsed.data.deviceId });
   if (parsed.data.from || parsed.data.to) {
     conditions.push({
@@ -240,15 +240,15 @@ punchRecordsRouter.post("/retry-bulk", async (req, res) => {
     return;
   }
 
-  const companyId = resolveCompanyScope(req, undefined);
-  const visibleIds = companyId
-    ? (
+  const scope = resolveCompanyScope(req, undefined);
+  const visibleIds = scope.all
+    ? parsed.data.ids
+    : (
         await prisma.punchRecord.findMany({
-          where: { id: { in: parsed.data.ids }, device: { companyId } },
+          where: { id: { in: parsed.data.ids }, device: { companyId: scope.companyId } },
           select: { id: true },
         })
-      ).map((r) => r.id)
-    : parsed.data.ids;
+      ).map((r) => r.id);
 
   await resetForRetry(visibleIds);
   res.json({ ok: true, retried: visibleIds.length });
