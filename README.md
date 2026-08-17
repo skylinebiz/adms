@@ -179,6 +179,12 @@ Until a device is claimed, its data-bearing pings (punch batches, device
 command acks) are **not** silently discarded — see the next section for
 why, and what to expect from an unclaimed device in the meantime.
 
+Before claiming, also see [Telling the device its own
+timezone](#telling-the-device-its-own-timezone) below, and specifically
+the "clock can go wrong before you ever get to set its timezone"
+subsection under it — the recommended sequence is to claim with the
+correct timezone *before* treating a device as live, then restart it.
+
 ## ADMS response codes and retry behavior
 
 Every `/iclock/*` response falls into one of four cases. ADMS device
@@ -586,6 +592,46 @@ SilkBio-101TC set to `Asia/Kolkata`. No single authoritative spec exists
 for this field, so this encoding was inferred from field reports and then
 verified directly on hardware. See `computeTimeZoneOptionValue` in
 `src/adms/timezone.ts`.
+
+### ⚠️ A device's clock can go wrong *before* you ever get to set its timezone
+
+Worth understanding if your device's firmware has the clock-reset-on-connect
+quirk described above: **the very first handshake a not-yet-claimed device
+makes can never carry `TimeZone=`, no matter what.** `TimeZone=` comes from
+`Device.timezone`, and there's no `Device` row — and so no timezone to
+send — until an admin claims the device. So the sequence for a brand new
+device is unavoidably:
+
+1. You point the device at its Cloud Server URL. It makes first contact,
+   shows up under **Unregistered Devices**. If its firmware has the
+   clock-reset quirk, this is the moment its clock can go wrong — there
+   was structurally no way to tell it the right timezone yet.
+2. You claim it, setting its timezone. The device's *records* on this
+   server are correct from this point on — but the device's own clock is
+   still whatever it was set to in step 1, since (per above) the
+   corrected `TimeZone=` only reaches it on its *next fresh handshake*,
+   and most firmware doesn't repeat that on its own once running.
+
+In between those two steps — and until the device actually gets that
+fresh handshake — any punches it records may carry an unreliable
+wall-clock timestamp, because the device's own clock may simply be wrong
+for that whole window.
+
+**Recommended sequence to avoid this:**
+
+1. After configuring the Cloud Server Setting, don't rely on real
+   check-ins/punches yet — claim the device with its correct timezone
+   *before* treating it as live.
+2. Right after claiming it, **restart the device.** This forces the fresh
+   handshake that's the only reliable way to actually deliver the
+   corrected `TimeZone=` (see above) — without it, the device may keep
+   running on whatever clock it picked up in step 1 indefinitely.
+3. This restart doubles as an immediate check: if the wrong timezone got
+   set during claiming, it'll be visibly wrong on the device right away,
+   so you catch and fix it on the spot — rather than a later, unrelated
+   reboot (a power cut, a firmware auto-restart) silently re-triggering
+   the same clock-reset quirk at some inconvenient moment with no obvious
+   cause to trace it back to.
 
 ## Device online/offline status
 

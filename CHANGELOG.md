@@ -12,6 +12,22 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.8.1] - 2026-08-17
+
+### Documentation
+
+- Added a README disclaimer under "Telling the device its own timezone":
+  a not-yet-claimed device's very first handshake structurally can never
+  carry `TimeZone=` (there's no `Device` row - and so no configured
+  timezone - until it's claimed), so firmware with the clock-reset-on-
+  connect quirk can end up with a wrong clock before an admin ever gets
+  a chance to set the right timezone. Recommends claiming a device with
+  its correct timezone *before* treating it as live, then restarting it
+  immediately after claiming - the restart both forces the fresh
+  handshake needed to actually deliver the corrected `TimeZone=`, and
+  surfaces a wrong timezone choice immediately instead of via a later,
+  unrelated reboot.
+
 ## [2.8.0] - 2026-08-17
 
 ### Added
