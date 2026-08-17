@@ -12,6 +12,19 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.6.1] - 2026-08-17
+
+### Fixed
+
+- `devicecmd` ACK matching used `/ID=(\S+)/` to pull a command's ID out
+  of the device's response body, but that only stops at whitespace, not
+  `&` - on the body's own documented shape
+  (`ID=<id>&Return=<code>&CMD=<...>`), it silently captured the ID plus
+  every field after it as one string, matched no row, and got logged as
+  "ack for unknown command id" even when the ID at the start was
+  correct. Caught live while verifying the new command tool. Now
+  `/ID=([^&\s]+)/`.
+
 ## [2.6.0] - 2026-08-17
 
 ### Added

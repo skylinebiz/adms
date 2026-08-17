@@ -27,7 +27,15 @@ export async function handleDeviceCmd(req: Request, res: Response) {
 
   await touchDevice(device.id);
 
-  const idMatch = /ID=(\S+)/.exec(body);
+  // [^&\s]+, not \S+: the body is documented (and observed) as
+  // &-joined fields ("ID=<id>&Return=<code>&CMD=<...>"), so \S+ would
+  // greedily swallow every field after ID= too, unless ID happened to be
+  // the last one - silently breaking ACK matching for any other body
+  // shape. Caught live: a real ACK attempt captured
+  // "ID=<realId>&Return=0&CMD=..." whole as the "id", which then matched
+  // no row and got logged as "ack for unknown command id" even though
+  // the real id was right there at the start.
+  const idMatch = /ID=([^&\s]+)/.exec(body);
   if (idMatch) {
     await prisma.deviceCommand
       .update({
