@@ -31,17 +31,23 @@ export async function findDeviceBySerial(serialNumber: string) {
   return prisma.device.findUnique({ where: { serialNumber } });
 }
 
-// Best-effort: a transient failure updating lastSeenAt/status must never
-// block the actual request handling that comes after it (e.g. storing a
-// punch batch that would otherwise have succeeded fine on its own).
+// Best-effort: a transient failure updating lastSeenAt must never block
+// the actual request handling that comes after it (e.g. storing a punch
+// batch that would otherwise have succeeded fine on its own).
+//
+// Only lastSeenAt is written here - online/offline status is never
+// stored, only computed from it at read time (see
+// src/utils/deviceStatus.ts). A written "ONLINE" would be true at this
+// exact instant and stale forever after, since nothing would revisit this
+// row once the device actually goes quiet.
 export async function touchDevice(deviceId: string) {
   try {
     await prisma.device.update({
       where: { id: deviceId },
-      data: { lastSeenAt: new Date(), status: "ONLINE" },
+      data: { lastSeenAt: new Date() },
     });
   } catch (err) {
-    deviceLogger.error({ err, deviceId }, "failed to update device last-seen/status (best-effort, not fatal)");
+    deviceLogger.error({ err, deviceId }, "failed to update device last-seen (best-effort, not fatal)");
   }
 }
 

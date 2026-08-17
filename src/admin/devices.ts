@@ -10,6 +10,7 @@ import { dispatchWebhook, renderPunchWebhookBody } from "../webhooks/dispatcher"
 import { renderHeaders, SAMPLE_TEMPLATE_VARS } from "../webhooks/template";
 import { OPTIONS_LIMIT, paginationQuerySchema } from "../utils/pagination";
 import { isValidTimeZone } from "../adms/timezone";
+import { computeDeviceStatus } from "../utils/deviceStatus";
 
 export const devicesRouter = Router();
 
@@ -63,7 +64,6 @@ function toDeviceListItem(device: {
   companyId: string;
   serialNumber: string;
   label: string | null;
-  status: string;
   lastSeenAt: Date | null;
   webhookUrl: string | null;
   webhookSecret: string | null;
@@ -74,6 +74,7 @@ function toDeviceListItem(device: {
 }) {
   return {
     ...device,
+    status: computeDeviceStatus(device.lastSeenAt),
     webhookUrlMasked: maskWebhookUrl(device.webhookUrl),
     webhookUrl: undefined,
     // Neither secret belongs in a list payload - only the full value.
@@ -262,7 +263,7 @@ devicesRouter.post("/claim", async (req, res) => {
   }
   // Full (unmasked) object, same as create/update - the admin needs to see
   // the carried-over deviceSecret to confirm it matches the physical device.
-  res.status(201).json({ device });
+  res.status(201).json({ device: { ...device, status: computeDeviceStatus(device.lastSeenAt) } });
 });
 
 devicesRouter.get("/", async (req, res) => {
@@ -303,7 +304,7 @@ devicesRouter.get("/:id", async (req, res) => {
     return;
   }
   // Full (unmasked) webhook URL is fine here - this is the single-device edit view.
-  res.json({ device });
+  res.json({ device: { ...device, status: computeDeviceStatus(device.lastSeenAt) } });
 });
 
 const createSchema = z.object({
@@ -354,7 +355,7 @@ devicesRouter.post("/", async (req, res) => {
     res.status(409).json({ error: "A device with this serial number is already registered" });
     return;
   }
-  res.status(201).json({ device });
+  res.status(201).json({ device: { ...device, status: computeDeviceStatus(device.lastSeenAt) } });
 });
 
 const updateSchema = z.object({
@@ -397,7 +398,7 @@ devicesRouter.patch("/:id", async (req, res) => {
   }
 
   const device = await prisma.device.update({ where: { id: req.params.id }, data });
-  res.json({ device });
+  res.json({ device: { ...device, status: computeDeviceStatus(device.lastSeenAt) } });
 });
 
 // Sends a live test webhook using the device's saved config, with optional

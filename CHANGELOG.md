@@ -12,6 +12,20 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.3.1] - 2026-08-17
+
+### Fixed
+
+- Device status no longer gets stuck on "ONLINE" forever. It was written
+  once to the database on first contact and never revisited, so a device
+  that pinged once and then went silent stayed "ONLINE" indefinitely.
+  Status (`UNKNOWN`/`ONLINE`/`OFFLINE`) is now computed from `lastSeenAt`
+  at read time instead of stored - see "Device online/offline status" in
+  the README. New `DEVICE_OFFLINE_THRESHOLD_MS` env var (default 5 min)
+  controls how long after last contact a device still counts as online.
+  The now-unused `Device.status` column and `DeviceStatus` enum are
+  dropped from the schema.
+
 ## [2.3.0] - 2026-08-17
 
 ### Added

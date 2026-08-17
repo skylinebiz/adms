@@ -459,6 +459,25 @@ The conversion (`src/adms/timezone.ts`) uses the IANA tz database via
 server-side (`isValidTimeZone`) — a typo or made-up zone is rejected with a
 400 rather than silently accepted.
 
+## Device online/offline status
+
+A device's ONLINE/OFFLINE/UNKNOWN badge in the admin UI is computed on
+every read from `lastSeenAt`, never stored. ZKTeco firmware has no
+"going offline" signal of its own (no disconnect notice, no last-will) —
+the only honest way to know a device stopped talking is that enough time
+has passed since its last contact:
+
+- **UNKNOWN** — never seen (`lastSeenAt` is null).
+- **ONLINE** — last contact within `DEVICE_OFFLINE_THRESHOLD_MS` (default
+  5 minutes).
+- **OFFLINE** — last contact longer ago than that.
+
+Because it's computed at read time instead of written once on contact and
+left alone, a device that pings once and then goes dark correctly shows
+OFFLINE a few minutes later, rather than staying ONLINE forever. Raising
+or lowering `DEVICE_OFFLINE_THRESHOLD_MS` takes effect immediately on the
+next read — no backfill or migration needed.
+
 ## Environment variables
 
 See [`.env.example`](.env.example) for the full list. Notable ones:
@@ -469,6 +488,7 @@ See [`.env.example`](.env.example) for the full list. Notable ones:
 | `JWT_SECRET` | Signs admin session cookies — must be a real secret |
 | `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` | One-time seed for the first super-admin |
 | `ADMS_MAX_BODY_SIZE` | Max device-facing request body size (default `10mb`) — see [ADMS response codes](#adms-response-codes-and-retry-behavior) |
+| `DEVICE_OFFLINE_THRESHOLD_MS` | How long (ms) after last contact a device is still shown as ONLINE (default `300000` = 5 min) — see [Device online/offline status](#device-onlineoffline-status) |
 | `WEBHOOK_MAX_ATTEMPTS` | Retries before a punch is marked "failed" in the admin panel |
 | `WORKER_POLL_INTERVAL_MS` / `WORKER_BATCH_SIZE` | How often / how many rows the worker claims per tick |
 

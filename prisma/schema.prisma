@@ -12,12 +12,6 @@ enum AdminRole {
   COMPANY_ADMIN
 }
 
-enum DeviceStatus {
-  UNKNOWN
-  ONLINE
-  OFFLINE
-}
-
 enum DeviceCommandStatus {
   PENDING
   SENT
@@ -65,7 +59,10 @@ model Device {
   company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   serialNumber   String       @unique
   label          String?
-  status         DeviceStatus @default(UNKNOWN)
+  // Online/offline is never stored - it's computed from lastSeenAt at
+  // read time (see computeDeviceStatus in src/utils/deviceStatus.ts).
+  // A stored status would only ever be set on contact and never revisited
+  // once a device actually goes quiet, so it would just lie forever.
   lastSeenAt     DateTime?
 
   // Path secret the device's own Cloud Server URL is configured with
