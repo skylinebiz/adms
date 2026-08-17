@@ -181,8 +181,9 @@ export const api = {
     ),
   listCompanyOptions: () => get<{ companies: CompanyOption[] }>("/companies/options"),
   createCompany: (data: { name: string; slug: string }) => post<{ company: Company }>("/companies", data),
-  updateCompany: (id: string, data: Partial<{ name: string; slug: string }>) =>
-    patch<{ company: Company }>(`/companies/${id}`, data),
+  // slug is fixed at creation - changing it would orphan every device
+  // already pointed at that URL - so only `name` can be patched.
+  updateCompany: (id: string, data: { name: string }) => patch<{ company: Company }>(`/companies/${id}`, data),
   deleteCompany: (id: string) => del<{ ok: true }>(`/companies/${id}`),
 
   listAdminUsers: (params: { companyId?: string } & PageParams = {}) =>
