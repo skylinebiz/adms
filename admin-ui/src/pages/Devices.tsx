@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { api, ApiError, CompanyOption, Device } from "../api";
 import { useAuth } from "../context/AuthContext";
 import DeviceDrawer from "../components/DeviceDrawer";
+import WebhookDrawer from "../components/WebhookDrawer";
+import DeviceCommandsDrawer from "../components/DeviceCommandsDrawer";
 import Pagination from "../components/Pagination";
 
 const PAGE_SIZE = 25;
@@ -16,6 +18,8 @@ export default function Devices() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [drawer, setDrawer] = useState<{ mode: "create" | "edit"; deviceId: string | null } | null>(null);
+  const [webhookDeviceId, setWebhookDeviceId] = useState<string | null>(null);
+  const [commandsDevice, setCommandsDevice] = useState<{ id: string; serialNumber: string } | null>(null);
 
   async function load() {
     setLoading(true);
@@ -106,22 +110,33 @@ export default function Devices() {
                       {d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : <span className="muted">never</span>}
                     </td>
                     <td>
+                      {/* Configured/enabled indicator only - never the URL itself, even masked,
+                          to keep this list from doubling as a place webhook endpoints leak into view. */}
                       {d.webhookUrlMasked ? (
-                        <>
-                          <code className="mono">{d.webhookUrlMasked}</code>{" "}
-                          {d.webhookEnabled ? (
-                            <span className="badge badge-delivered">on</span>
-                          ) : (
-                            <span className="badge badge-offline">off</span>
-                          )}
-                        </>
+                        <span
+                          className={`badge ${d.webhookEnabled ? "badge-delivered" : "badge-offline"}`}
+                          title={d.webhookEnabled ? "Webhook configured and enabled" : "Webhook configured but disabled"}
+                        >
+                          {d.webhookEnabled ? "● Enabled" : "○ Disabled"}
+                        </span>
                       ) : (
-                        <span className="muted">not set</span>
+                        <span className="muted" title="No webhook configured for this device">
+                          Not configured
+                        </span>
                       )}
                     </td>
-                    <td style={{ display: "flex", gap: 6 }}>
+                    <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       <button className="btn btn-sm" onClick={() => setDrawer({ mode: "edit", deviceId: d.id })}>
                         Edit
+                      </button>
+                      <button className="btn btn-sm" onClick={() => setWebhookDeviceId(d.id)}>
+                        Webhook
+                      </button>
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => setCommandsDevice({ id: d.id, serialNumber: d.serialNumber })}
+                      >
+                        Commands
                       </button>
                       <Link className="btn btn-sm" to={`/punch-records?deviceId=${d.id}`}>
                         Punches
@@ -157,6 +172,18 @@ export default function Devices() {
           companies={companies}
           onClose={() => setDrawer(null)}
           onSaved={load}
+        />
+      )}
+
+      {webhookDeviceId && (
+        <WebhookDrawer deviceId={webhookDeviceId} onClose={() => setWebhookDeviceId(null)} onSaved={load} />
+      )}
+
+      {commandsDevice && (
+        <DeviceCommandsDrawer
+          deviceId={commandsDevice.id}
+          serialNumber={commandsDevice.serialNumber}
+          onClose={() => setCommandsDevice(null)}
         />
       )}
     </div>

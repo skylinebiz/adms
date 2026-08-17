@@ -12,6 +12,26 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.9.0] - 2026-08-17
+
+### Changed
+
+- Split the device drawer into three focused dialogs, opened directly
+  from the Devices list instead of one congested form:
+  - **Device drawer** (Edit) now holds only device *definition* fields -
+    serial number, label, secret, timezone.
+  - New **Webhook** dialog (new "Webhook" button per row) holds
+    everything webhook-related - URL, enabled toggle, secret, custom
+    headers, custom body template, template picker, send test webhook.
+  - New **Commands** dialog (new "Commands" button per row) holds the
+    raw ADMS command tool - send a command, view delivery/ACK history.
+- The Devices list's Webhook column no longer shows the URL at all, not
+  even masked - just whether a webhook is configured and, if so, whether
+  it's enabled.
+
+No backend changes - the admin API already supported partial device
+updates, so this is purely an admin-UI reorganization.
+
 ## [2.8.1] - 2026-08-17
 
 ### Documentation

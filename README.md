@@ -368,6 +368,16 @@ Raw Request Log especially, since it logs every heartbeat — so periodic
 pruning is worth setting up for a long-running production deployment; none
 is built in.
 
+A third tool, in its own dedicated dialog (admin panel → Devices →
+"Commands" on a device's row), is for finding out what a given firmware
+actually *does* rather than just what it sends: queue an arbitrary raw
+command, delivered on the device's next `/iclock/getrequest` poll as
+`C:<id>:<command>`, and see whether/how it responds. There's no complete
+public spec for this protocol, so for anything not already covered by
+this server, this is often the only way to find out - see "Telling the
+device its own timezone" above for the investigation that led to
+building it.
+
 ### Deleting records
 
 Punch Records, Failed Webhooks, Raw Data Dump, and Raw Request Log all
@@ -380,8 +390,12 @@ punch record cascades to its webhook delivery attempt history.
 ## Webhook delivery
 
 Each device has its own `webhookUrl` + `webhookSecret` + `webhookEnabled`
-toggle (admin panel → Devices → Edit). When set, every captured punch is
-POSTed as JSON to that URL:
+toggle, configured from its own dedicated **Webhook** dialog (admin panel
+→ Devices → the "Webhook" button on that device's row) — kept separate
+from the device-definition edit form so the two don't crowd each other.
+The Devices list itself never shows the URL, not even masked — just
+whether a webhook is configured and, if so, whether it's enabled. When
+set, every captured punch is POSTed as JSON to that URL:
 
 ```json
 {
@@ -445,8 +459,8 @@ the instant a webhook URL is saved.
 ### Custom headers and request body shape
 
 The default payload shape above isn't always what a receiving endpoint
-expects. Each device can override both, from the admin panel → Devices →
-Edit:
+expects. Each device can override both, from that device's **Webhook**
+dialog (admin panel → Devices → "Webhook" on that device's row):
 
 - **Custom headers** — arbitrary key/value pairs sent with every request
   (e.g. `Authorization: Bearer <token>` for endpoints that need their own
@@ -476,7 +490,7 @@ Example custom body template:
 }
 ```
 
-**Send test webhook**, in the same edit drawer, POSTs a realistic sample
+**Send test webhook**, in the same Webhook dialog, POSTs a realistic sample
 punch (using the device's real ID/serial/company, but not a real punch
 record) to whatever URL/headers/body template are currently in the form —
 including unsaved edits — so you can verify the receiving endpoint's shape
@@ -510,7 +524,7 @@ To use it:
 
 1. In ERPNext: your user → **Settings → API Access → Generate Keys** to
    get an API Key and API Secret.
-2. In this app's device drawer: pick the template, then replace
+2. In this app's Webhook dialog for that device: pick the template, then replace
    `YOUR-SITE` (your ERPNext site's domain) and `YOUR_API_KEY` /
    `YOUR_API_SECRET` (from step 1) in the prefilled URL and
    `Authorization` header. The header uses Frappe's own token format
