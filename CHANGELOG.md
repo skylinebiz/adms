@@ -12,6 +12,17 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.4.0] - 2026-08-17
+
+### Added
+
+- Console log of every incoming HTTP request (method, full URL, response
+  status, duration), including requests that match no route at all.
+  Previously a device pinging an unserved path - e.g. firmware that can't
+  carry the company-slug prefix and calls bare `/iclock/cdata` - 404'd
+  with zero trace in either the Raw Request Log or the server output.
+  Watch with `docker compose logs -f server`.
+
 ## [2.3.1] - 2026-08-17
 
 ### Fixed

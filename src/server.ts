@@ -17,6 +17,22 @@ async function main() {
   const app = express();
   app.disable("x-powered-by");
 
+  // Console log of every incoming HTTP request, registered before anything
+  // else so it also catches requests that match no route at all - the case
+  // that motivated it: a device firmware pinging a path we don't serve
+  // (e.g. bare /iclock/cdata with no company prefix) previously 404'd with
+  // zero trace anywhere. Plain console.log, not pino - this is a
+  // watch-the-terminal debugging aid, one readable line per request.
+  app.use((req, res, next) => {
+    const startedAt = Date.now();
+    res.on("finish", () => {
+      console.log(
+        `[req] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${Date.now() - startedAt}ms)`
+      );
+    });
+    next();
+  });
+
   // --- Device-facing ADMS routes: unauthenticated, no CSRF, no JSON body
   // parser ahead of it. Sits in complete isolation from the admin
   // middleware stack below (registered before it, not after) so it never
