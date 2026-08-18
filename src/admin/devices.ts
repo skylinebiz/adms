@@ -261,11 +261,21 @@ devicesRouter.post("/claim", async (req, res) => {
     })
     .catch((err) => {
       if (err?.code === "P2002") return "conflict" as const;
+      // A well-formed but nonexistent companyId (super_admin is exempt from
+      // the earlier "does this match your own company" check, so this is
+      // the only guard against a fabricated ID for that role) trips the
+      // companyId foreign key rather than any check above - without this,
+      // it would propagate as an unhandled rejection and surface as a 500.
+      if (err?.code === "P2003") return "no-such-company" as const;
       throw err;
     });
 
   if (device === "conflict") {
     res.status(409).json({ error: "A device with this serial number is already registered" });
+    return;
+  }
+  if (device === "no-such-company") {
+    res.status(400).json({ error: "companyId does not refer to an existing company" });
     return;
   }
   // Full (unmasked) object, same as create/update - the admin needs to see
@@ -364,11 +374,19 @@ devicesRouter.post("/", async (req, res) => {
     })
     .catch((err) => {
       if (err?.code === "P2002") return "conflict" as const;
+      // Same fabricated-companyId case as /claim above - reachable here by
+      // a super_admin (exempt from the ownership check just above) sending
+      // a well-formed but nonexistent companyId.
+      if (err?.code === "P2003") return "no-such-company" as const;
       throw err;
     });
 
   if (device === "conflict") {
     res.status(409).json({ error: "A device with this serial number is already registered" });
+    return;
+  }
+  if (device === "no-such-company") {
+    res.status(400).json({ error: "companyId does not refer to an existing company" });
     return;
   }
   res.status(201).json({ device: { ...device, status: computeDeviceStatus(device.lastSeenAt) } });

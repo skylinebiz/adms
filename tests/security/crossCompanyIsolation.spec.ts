@@ -95,6 +95,44 @@ describe("company_admin cannot read another company's resources by ID", () => {
     expect(res.body.devices.every((d: { companyId: string }) => d.companyId === companyA.id)).toBe(true);
     expect(res.body.devices.some((d: { id: string }) => d.id === deviceB.id)).toBe(false);
   });
+
+  it("GET /admin-users?companyId=<foreign> is ignored the same way", async () => {
+    const res = await request(app)
+      .get(`/api/admin/admin-users?companyId=${companyB.id}`)
+      .set("Cookie", adminA.cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.adminUsers.every((u: { companyId: string }) => u.companyId === companyA.id)).toBe(true);
+  });
+
+  it("GET /devices/unregistered-pings?companyId=<foreign> is ignored the same way", async () => {
+    const res = await request(app)
+      .get(`/api/admin/devices/unregistered-pings?companyId=${companyB.id}`)
+      .set("Cookie", adminA.cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.pings.every((p: { companyId: string | null }) => p.companyId !== companyB.id)).toBe(true);
+  });
+
+  it("GET /punch-records?deviceId=<a real device owned by another company> returns empty, not that device's records", async () => {
+    // The filter is a query param, not a path param with its own ownership
+    // check ahead of it - the risk is the deviceId filter getting OR'd (or
+    // just applied alone) instead of AND'd with the caller's own company
+    // scope, which would leak company B's punch data to company A simply by
+    // guessing/observing a real foreign device ID.
+    const res = await request(app)
+      .get(`/api/admin/punch-records?deviceId=${deviceB.id}`)
+      .set("Cookie", adminA.cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.records).toEqual([]);
+    expect(res.body.total).toBe(0);
+  });
+
+  it("GET /punch-records/failed?deviceId=<foreign device> returns empty too", async () => {
+    const res = await request(app)
+      .get(`/api/admin/punch-records/failed?deviceId=${deviceB.id}`)
+      .set("Cookie", adminA.cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.records).toEqual([]);
+  });
 });
 
 describe("company_admin cannot write to another company's resources", () => {
@@ -177,6 +215,42 @@ describe("company_admin cannot write to another company's resources", () => {
       .set("Cookie", adminA.cookie)
       .send({ companyId: companyA.id });
     expect(res.status).toBe(403);
+  });
+
+  it("POST /punch-records/retry-bulk with a MIXED array (one own, one foreign) processes only the own one, not zero and not both", async () => {
+    const deviceA = await createDevice(companyA.id);
+    const punchA = await prisma.punchRecord.create({
+      data: { deviceId: deviceA.id, devicePin: "1", punchTime: new Date(), status: 0, verifyMode: 1, rawLine: "raw" },
+    });
+    const before = await prisma.punchRecord.findUnique({ where: { id: punchB.id } });
+    const res = await request(app)
+      .post("/api/admin/punch-records/retry-bulk")
+      .set("Cookie", adminA.cookie)
+      .send({ ids: [punchA.id, punchB.id] });
+    expect(res.status).toBe(200);
+    expect(res.body.retried).toBe(1);
+    const afterA = await prisma.punchRecord.findUnique({ where: { id: punchA.id } });
+    const afterB = await prisma.punchRecord.findUnique({ where: { id: punchB.id } });
+    expect(afterA?.webhookAttempts).toBe(0); // was reset - it's the caller's own record
+    expect(afterB?.nextAttemptAt).toEqual(before?.nextAttemptAt); // untouched - foreign record silently dropped
+  });
+
+  it("DELETE /devices/:id/raw-logs/:logId rejects a real logId that belongs to a DIFFERENT device, even one the caller owns", async () => {
+    // Same check, but proving it's actually keyed on deviceId+logId together
+    // (not just "does this logId exist anywhere") - a log that's 100% real
+    // and 100% visible to this admin, just filed under the wrong device in
+    // the URL, must still 404, not succeed against the wrong device's log.
+    const deviceA = await createDevice(companyA.id);
+    const deviceA2 = await createDevice(companyA.id);
+    const log = await prisma.deviceRawLog.create({
+      data: { deviceId: deviceA.id, endpoint: "/iclock/cdata", method: "POST" },
+    });
+    const res = await request(app)
+      .delete(`/api/admin/devices/${deviceA2.id}/raw-logs/${log.id}`)
+      .set("Cookie", superAdmin.cookie);
+    expect(res.status).toBe(404);
+    const stillThere = await prisma.deviceRawLog.findUnique({ where: { id: log.id } });
+    expect(stillThere).not.toBeNull();
   });
 });
 

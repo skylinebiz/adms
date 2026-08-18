@@ -12,6 +12,34 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.10.1] - 2026-08-18
+
+### Added
+
+- 10 more E2E security tests, prompted by a direct question about two gaps
+  in the 2.10.0 review: whether query-string filters referencing a real
+  resource are checked for ownership (they were - `?deviceId=`/`?companyId=`
+  on every list endpoint stay AND'd with the caller's own company scope,
+  confirmed for punch-records, admin-users, and unregistered-pings), and
+  whether a real-but-foreign ID mixed into a bulk array is handled
+  correctly (it is - silently dropped, not 500'd and not acted on). Also
+  added a same-company cross-device raw-log ID confusion check, and a
+  syntactically-valid-but-nonexistent `companyId` check across every
+  create/claim endpoint - the last of which surfaced the bug below.
+
+### Fixed
+
+- **A well-formed but nonexistent `companyId` crashed device/admin-user
+  creation with a 500** instead of a clean rejection. `POST /devices`,
+  `POST /devices/claim`, and `POST /admin-users` all trust the request
+  body's `companyId` once a super_admin sends it (a company_admin is
+  already forced to their own real company, but super_admin is
+  deliberately exempt from that check) - a fabricated ID trips the
+  database's foreign-key constraint instead of any validation the app
+  itself was doing, and that constraint violation was propagating as an
+  unhandled rejection through `errorHandler`'s generic 500 path. All three
+  now catch it (`P2003`) and return a clean 400.
+
 ## [2.10.0] - 2026-08-18
 
 ### Added

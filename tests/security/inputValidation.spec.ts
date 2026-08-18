@@ -163,6 +163,42 @@ describe("admin-user creation cannot be used for privilege escalation", () => {
   });
 });
 
+describe("a syntactically-valid but nonexistent companyId is rejected cleanly, not a 500 from an unhandled FK violation", () => {
+  const fakeButValidLookingId = "cknonexistent0000000000000";
+
+  it("POST /devices with a well-formed but nonexistent companyId", async () => {
+    const res = await request(app)
+      .post("/api/admin/devices")
+      .set("Cookie", superAdmin.cookie)
+      .send({ companyId: fakeButValidLookingId, serialNumber: `FK-${Date.now()}`, deviceSecret: "s", timezone: "UTC" });
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /admin-users with a well-formed but nonexistent companyId", async () => {
+    const res = await request(app)
+      .post("/api/admin/admin-users")
+      .set("Cookie", superAdmin.cookie)
+      .send({ email: `fk-${Date.now()}@example.test`, password: "longenough1", role: "COMPANY_ADMIN", companyId: fakeButValidLookingId });
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /devices/claim with a well-formed but nonexistent companyId", async () => {
+    const res = await request(app)
+      .post("/api/admin/devices/claim")
+      .set("Cookie", superAdmin.cookie)
+      .send({ serialNumber: `FK-CLAIM-${Date.now()}`, companyId: fakeButValidLookingId, timezone: "UTC" });
+    expect(res.status).toBe(400);
+  });
+
+  it("PATCH /admin-users/:id with a nonexistent companyId is already handled safely (blanket catch -> 404), confirmed here so a future refactor can't regress it", async () => {
+    const res = await request(app)
+      .patch(`/api/admin/admin-users/${adminA.id}`)
+      .set("Cookie", superAdmin.cookie)
+      .send({ companyId: fakeButValidLookingId });
+    expect(res.status).toBeLessThan(500);
+  });
+});
+
 describe("device creation/update reject malformed and mass-assignment payloads", () => {
   it("rejects wrong-typed companyId/serialNumber (numbers/objects instead of strings)", async () => {
     const res = await request(app)

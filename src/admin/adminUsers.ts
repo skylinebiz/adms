@@ -83,11 +83,22 @@ adminUsersRouter.post("/", async (req, res) => {
     })
     .catch((err) => {
       if (err?.code === "P2002") return "conflict" as const;
+      // A well-formed but nonexistent companyId trips the FK constraint
+      // rather than any check above (a company_admin's companyId is
+      // already forced to match their own real company, but a super_admin
+      // is exempt from that check and can send any string here) - without
+      // this it would propagate as an unhandled rejection and surface as a
+      // generic 500 instead of a clean rejection of the bad input.
+      if (err?.code === "P2003") return "no-such-company" as const;
       throw err;
     });
 
   if (user === "conflict") {
     res.status(409).json({ error: "An admin user with this email already exists" });
+    return;
+  }
+  if (user === "no-such-company") {
+    res.status(400).json({ error: "companyId does not refer to an existing company" });
     return;
   }
   res.status(201).json({ adminUser: toPublicUser(user) });
