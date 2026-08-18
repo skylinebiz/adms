@@ -12,6 +12,21 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.10.2] - 2026-08-18
+
+### Fixed
+
+- **Worker container crash-looped on `Missing required environment
+  variable: JWT_SECRET`** - a direct regression from 2.10.0's fix. That
+  change correctly made `JWT_SECRET` a hard requirement (no more insecure
+  fallback) for `server.ts`, which does sign/verify admin session tokens -
+  but `worker.ts` imports the same shared `src/config.ts`, which validates
+  every field eagerly at import time regardless of which ones the
+  importing entry point actually reads. `worker.ts` never touches a JWT at
+  all, and its `docker-compose.yml` environment block never included
+  `JWT_SECRET` (it didn't need to, before the fallback was removed).
+  `worker` now receives `JWT_SECRET` the same way `server` already does.
+
 ## [2.10.1] - 2026-08-18
 
 ### Added

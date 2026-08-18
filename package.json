@@ -1,6 +1,6 @@
 {
   "name": "adms-server",
-  "version": "2.10.1",
+  "version": "2.10.2",
   "description": "Multitenant Node.js ADMS server for ZKTeco devices",
   "main": "dist/server.js",
   "type": "commonjs",

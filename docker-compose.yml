@@ -69,6 +69,17 @@ services:
         condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql://adms:adms@postgres:5432/adms
+      # worker.ts never actually signs/verifies a JWT (only src/admin/jwt.ts
+      # does, which only server.ts's request handlers ever call) - but it
+      # imports the same shared src/config.ts as server.ts, which validates
+      # every env var eagerly at import time regardless of which fields the
+      # importing entry point actually reads. Omitting this here used to be
+      # harmless because config.ts had an insecure fallback default; once
+      # that fallback was removed (JWT_SECRET became a hard requirement,
+      # correctly, since server.ts does need a real one), the worker
+      # container had nothing to satisfy that check and crash-looped on
+      # every boot.
+      JWT_SECRET: ${JWT_SECRET}
       WEBHOOK_MAX_ATTEMPTS: ${WEBHOOK_MAX_ATTEMPTS:-5}
       WEBHOOK_TIMEOUT_MS: ${WEBHOOK_TIMEOUT_MS:-8000}
       WORKER_POLL_INTERVAL_MS: ${WORKER_POLL_INTERVAL_MS:-3000}
