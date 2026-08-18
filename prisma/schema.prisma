@@ -172,6 +172,18 @@ model WebhookDelivery {
   delivered     Boolean
   error         String?
 
+  // Exactly what was sent - the rendered JSON body and the resolved header
+  // set (including Content-Type and, when the device has a webhookSecret,
+  // the computed X-Webhook-Signature), captured verbatim from the same
+  // dispatchWebhook() call that made the request, not reconstructed after
+  // the fact. Nullable: rows created before this field existed have
+  // nothing to backfill it with - the request they made is simply gone.
+  // Headers stored as a JSON-stringified string, matching the convention
+  // already used for RawRequestLog/DeviceRawLog rather than a native Json
+  // column, since this is captured/displayed verbatim, never queried by field.
+  requestBody    String?
+  requestHeaders String?
+
   createdAt     DateTime @default(now())
 
   @@index([punchRecordId])

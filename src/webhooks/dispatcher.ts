@@ -92,6 +92,13 @@ export interface WebhookDispatchResult {
   statusCode: number | null;
   responseBody: string | null;
   error: string | null;
+  // Exactly what was sent (or, on a failed/timed-out attempt, what WOULD
+  // have been sent - the request is built before the network call, so this
+  // is populated either way). requestHeaders includes the computed
+  // X-Webhook-Signature when a secret was configured, not just the
+  // caller-supplied extraHeaders.
+  requestBody: string;
+  requestHeaders: Record<string, string>;
 }
 
 const MAX_STORED_RESPONSE_BODY = 5000;
@@ -134,6 +141,8 @@ export async function dispatchWebhook(
       statusCode: response.status,
       responseBody,
       error: response.ok ? null : `HTTP ${response.status}`,
+      requestBody: rawBody,
+      requestHeaders: headers,
     };
   } catch (err) {
     const isAbort = err instanceof Error && err.name === "AbortError";
@@ -142,6 +151,8 @@ export async function dispatchWebhook(
       statusCode: null,
       responseBody: null,
       error: isAbort ? `timed out after ${timeoutMs}ms` : err instanceof Error ? err.message : String(err),
+      requestBody: rawBody,
+      requestHeaders: headers,
     };
   } finally {
     clearTimeout(timeout);
@@ -157,7 +168,14 @@ export async function dispatchPunchWebhook(
   timeoutMs: number
 ): Promise<WebhookDispatchResult> {
   if (!device.webhookUrl) {
-    return { success: false, statusCode: null, responseBody: null, error: "no webhook URL configured" };
+    return {
+      success: false,
+      statusCode: null,
+      responseBody: null,
+      error: "no webhook URL configured",
+      requestBody: "",
+      requestHeaders: {},
+    };
   }
   const vars = buildTemplateVars(punch, device, companyName);
   const body = renderPunchWebhookBody(device.webhookBodyTemplate, vars);

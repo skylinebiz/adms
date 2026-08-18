@@ -191,6 +191,10 @@ export interface WebhookDelivery {
   responseBody: string | null;
   delivered: boolean;
   error: string | null;
+  // Null on deliveries recorded before this was captured - nothing to
+  // backfill them with, the request they made is simply gone.
+  requestBody: string | null;
+  requestHeaders: string | null;
   createdAt: string;
 }
 

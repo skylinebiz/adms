@@ -12,6 +12,34 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.11.0] - 2026-08-18
+
+### Fixed
+
+- **Clicking "Retry" on a webhook delivery reset the attempt counter to
+  zero** instead of continuing it. Since `webhookAttempts` also drives the
+  "failed" threshold and the automatic backoff schedule, resetting it
+  meant a record that had already exhausted `WEBHOOK_MAX_ATTEMPTS` got a
+  *fresh* run through all of them again on the next manual retry, instead
+  of the one additional attempt the click was actually asking for.
+  `resetForRetry` now only clears `nextAttemptAt`/`webhookHeld` to queue it
+  - the attempt count is a running total for the record's whole life and
+  is never rolled back. A manual retry on an already-exhausted record now
+  produces exactly one more attempt (logged and counted normally) before
+  re-parking, and can be clicked again any number of times after that.
+
+### Added
+
+- The webhook delivery log (Punch Records → Log) now shows the request
+  URL for every attempt, and a collapsed-by-default "Request sent" section
+  with the exact headers (including the computed `X-Webhook-Signature`)
+  and JSON body that were actually POSTed - previously only the response
+  was shown. Captured verbatim from the same `dispatchWebhook()` call that
+  made the request (`WebhookDelivery.requestBody`/`requestHeaders`,
+  nullable). Deliveries recorded before this shipped have nothing to
+  backfill it with, so the drawer shows "not captured for this delivery"
+  for those instead of hiding the section.
+
 ## [2.10.2] - 2026-08-18
 
 ### Fixed

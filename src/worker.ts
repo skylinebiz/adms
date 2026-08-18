@@ -22,7 +22,11 @@ const CLAIM_LEASE_MS = 60_000;
 
 // Once retries are exhausted, park nextAttemptAt far in the future so the
 // worker stops picking the row back up. The admin panel's "Retry now"
-// action resets nextAttemptAt/webhookAttempts to bring it back into rotation.
+// action brings it back into rotation by resetting nextAttemptAt alone -
+// webhookAttempts is deliberately left untouched (see resetForRetry in
+// src/admin/punchRecords.ts), so a manual retry on an already-parked
+// record produces exactly one more attempt before it re-parks, not a
+// fresh run through the whole backoff schedule.
 const PARKED_NEXT_ATTEMPT = new Date("2099-01-01T00:00:00Z");
 
 async function claimBatch(batchSize: number): Promise<string[]> {
@@ -79,6 +83,8 @@ async function processPunchRecord(id: string) {
         responseBody: result.responseBody,
         delivered: result.success,
         error: result.error,
+        requestBody: result.requestBody,
+        requestHeaders: JSON.stringify(result.requestHeaders),
       },
     }),
     prisma.punchRecord.update({

@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { buildTemplateVars } from "../src/webhooks/dispatcher";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { buildTemplateVars, dispatchWebhook } from "../src/webhooks/dispatcher";
 import { renderBodyTemplate, renderHeaders, SAMPLE_TEMPLATE_VARS } from "../src/webhooks/template";
 import { erpnextEmployeeCheckin } from "../src/webhooks/templates/erpnext";
 
@@ -53,5 +53,45 @@ describe("erpnext webhook template", () => {
   it("carries the Frappe token-auth header format", () => {
     const headers = renderHeaders(erpnextEmployeeCheckin.headers, SAMPLE_TEMPLATE_VARS);
     expect(headers.Authorization).toMatch(/^token /);
+  });
+});
+
+describe("dispatchWebhook echoes back exactly what it sent", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("on success, requestBody/requestHeaders match the actual fetch call, including the computed signature", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, text: () => Promise.resolve("thanks") });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await dispatchWebhook(
+      "https://example.com/hook",
+      "my-secret",
+      { event: "punch.created", pin: "1" },
+      5000,
+      { "X-Custom": "abc" }
+    );
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(result.requestBody).toBe(init.body);
+    expect(result.requestHeaders).toEqual(init.headers);
+    expect(result.requestHeaders["Content-Type"]).toBe("application/json");
+    expect(result.requestHeaders["X-Custom"]).toBe("abc");
+    expect(result.requestHeaders["X-Webhook-Signature"]).toMatch(/^sha256=/);
+    expect(JSON.parse(result.requestBody)).toEqual({ event: "punch.created", pin: "1" });
+  });
+
+  it("on a failed/unreachable request, still reports what WOULD have been sent (not null)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new Error("ECONNREFUSED"))
+    );
+
+    const result = await dispatchWebhook("https://example.com/hook", null, { a: 1 }, 5000);
+    expect(result.success).toBe(false);
+    expect(result.requestBody).toBe(JSON.stringify({ a: 1 }));
+    expect(result.requestHeaders["Content-Type"]).toBe("application/json");
+    expect(result.requestHeaders["X-Webhook-Signature"]).toBeUndefined(); // no secret configured
   });
 });

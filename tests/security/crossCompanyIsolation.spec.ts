@@ -219,10 +219,20 @@ describe("company_admin cannot write to another company's resources", () => {
 
   it("POST /punch-records/retry-bulk with a MIXED array (one own, one foreign) processes only the own one, not zero and not both", async () => {
     const deviceA = await createDevice(companyA.id);
+    const farFuture = new Date("2099-01-01T00:00:00Z"); // parked, same as worker.ts's PARKED_NEXT_ATTEMPT
     const punchA = await prisma.punchRecord.create({
-      data: { deviceId: deviceA.id, devicePin: "1", punchTime: new Date(), status: 0, verifyMode: 1, rawLine: "raw" },
+      data: {
+        deviceId: deviceA.id,
+        devicePin: "1",
+        punchTime: new Date(),
+        status: 0,
+        verifyMode: 1,
+        rawLine: "raw",
+        webhookAttempts: 5,
+        nextAttemptAt: farFuture,
+      },
     });
-    const before = await prisma.punchRecord.findUnique({ where: { id: punchB.id } });
+    const beforeB = await prisma.punchRecord.findUnique({ where: { id: punchB.id } });
     const res = await request(app)
       .post("/api/admin/punch-records/retry-bulk")
       .set("Cookie", adminA.cookie)
@@ -231,8 +241,12 @@ describe("company_admin cannot write to another company's resources", () => {
     expect(res.body.retried).toBe(1);
     const afterA = await prisma.punchRecord.findUnique({ where: { id: punchA.id } });
     const afterB = await prisma.punchRecord.findUnique({ where: { id: punchB.id } });
-    expect(afterA?.webhookAttempts).toBe(0); // was reset - it's the caller's own record
-    expect(afterB?.nextAttemptAt).toEqual(before?.nextAttemptAt); // untouched - foreign record silently dropped
+    // Queued (nextAttemptAt brought forward to now) but NOT reset - retry
+    // must produce exactly one more attempt on top of history, not restart
+    // the count from zero.
+    expect(afterA?.nextAttemptAt.getTime()).toBeLessThan(farFuture.getTime());
+    expect(afterA?.webhookAttempts).toBe(5);
+    expect(afterB?.nextAttemptAt).toEqual(beforeB?.nextAttemptAt); // untouched - foreign record silently dropped
   });
 
   it("DELETE /devices/:id/raw-logs/:logId rejects a real logId that belongs to a DIFFERENT device, even one the caller owns", async () => {

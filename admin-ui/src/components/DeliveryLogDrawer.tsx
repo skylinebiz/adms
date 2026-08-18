@@ -6,6 +6,43 @@ import Pagination from "./Pagination";
 
 const PAGE_SIZE = 10;
 
+// Both requestBody and requestHeaders are stored as raw strings (the exact
+// bytes/JSON.stringify output sent) - re-indent for readability if it
+// parses as JSON, otherwise show as-is rather than hide it.
+function formatJson(raw: string): string {
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2);
+  } catch {
+    return raw;
+  }
+}
+
+function PreBlock({ label, children }: { label: string; children: string }) {
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div className="muted" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.4 }}>
+        {label}
+      </div>
+      <pre
+        style={{
+          marginTop: 2,
+          background: "var(--neutral-tint)",
+          color: "var(--text)",
+          padding: 8,
+          borderRadius: 6,
+          fontSize: 11,
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-all",
+          maxHeight: 160,
+          overflow: "auto",
+        }}
+      >
+        {children}
+      </pre>
+    </div>
+  );
+}
+
 export default function DeliveryLogDrawer({ punchRecordId, onClose }: { punchRecordId: string; onClose: () => void }) {
   const [punchRecord, setPunchRecord] = useState<PunchRecord | null>(null);
   const [deliveries, setDeliveries] = useState<WebhookDelivery[]>([]);
@@ -64,27 +101,27 @@ export default function DeliveryLogDrawer({ punchRecordId, onClose }: { punchRec
                   </span>
                 </div>
                 <div className="muted">{new Date(d.createdAt).toLocaleString()}</div>
+                <div className="mono" style={{ marginTop: 6, fontSize: 11, wordBreak: "break-all" }}>
+                  POST {d.url}
+                </div>
                 <div style={{ marginTop: 6 }}>
                   Status code: {d.statusCode ?? <span className="muted">n/a</span>}
                 </div>
                 {d.error && <div className="error-banner" style={{ marginTop: 6 }}>{d.error}</div>}
-                {d.responseBody && (
-                  <pre
-                    style={{
-                      marginTop: 6,
-                      background: "var(--neutral-tint)",
-                      color: "var(--text)",
-                      padding: 8,
-                      borderRadius: 6,
-                      fontSize: 11,
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-all",
-                      maxHeight: 120,
-                      overflow: "auto",
-                    }}
-                  >
-                    {d.responseBody}
-                  </pre>
+                {d.responseBody && <PreBlock label="Response body">{d.responseBody}</PreBlock>}
+
+                {d.requestBody || d.requestHeaders ? (
+                  <details style={{ marginTop: 8 }}>
+                    <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--text-muted)" }}>
+                      Request sent
+                    </summary>
+                    {d.requestHeaders && <PreBlock label="Headers">{formatJson(d.requestHeaders)}</PreBlock>}
+                    {d.requestBody && <PreBlock label="Body">{formatJson(d.requestBody)}</PreBlock>}
+                  </details>
+                ) : (
+                  <div className="muted" style={{ marginTop: 6, fontSize: 11 }}>
+                    Request details not captured for this delivery (recorded before this was tracked)
+                  </div>
                 )}
               </div>
             ))}

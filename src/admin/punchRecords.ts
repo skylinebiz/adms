@@ -206,14 +206,22 @@ punchRecordsRouter.get("/:id/deliveries", async (req, res) => {
   res.json({ punchRecord: serializeRecord(record), deliveries, total, page, pageSize });
 });
 
-// Resets a punch record into the worker's next poll: nextAttemptAt = now(),
-// webhookAttempts = 0, webhookHeld = false, so it's picked up on the
-// worker's next tick (clearing the hold is what lets a pre-webhook backlog
-// record be explicitly sent on demand instead of automatically).
+// Queues a punch record for the worker's next poll: nextAttemptAt = now(),
+// webhookHeld = false (clearing the hold is what lets a pre-webhook backlog
+// record be explicitly sent on demand instead of automatically). Does NOT
+// touch webhookAttempts - that's a running total across the record's whole
+// life, not "attempts since the last manual retry," and the admin panel's
+// Attempts column / delivery log both rely on it never going backwards.
+// Once a record has hit webhookMaxAttempts it stays parked (see
+// PARKED_NEXT_ATTEMPT in worker.ts) and this is the only way back into
+// rotation - because the count isn't reset, one manual retry produces
+// exactly one more attempt (attemptNumber is already >= max, so a failure
+// re-parks it immediately) rather than re-arming several more automatic
+// backoff retries.
 async function resetForRetry(ids: string[]) {
   await prisma.punchRecord.updateMany({
     where: { id: { in: ids } },
-    data: { nextAttemptAt: new Date(), webhookAttempts: 0, webhookHeld: false },
+    data: { nextAttemptAt: new Date(), webhookHeld: false },
   });
 }
 
