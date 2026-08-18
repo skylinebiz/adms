@@ -11,7 +11,12 @@ function required(name: string, fallback?: string): string {
 export const config = {
   port: Number(process.env.PORT ?? 8080),
   databaseUrl: required("DATABASE_URL"),
-  jwtSecret: required("JWT_SECRET", "dev-only-insecure-secret-change-me"),
+  // No insecure fallback here on purpose: this signs every admin session
+  // token, including SUPER_ADMIN ones. A silent default would mean a
+  // deployment that simply forgot to set JWT_SECRET boots up fine and
+  // serves traffic while every session it issues is forgeable by anyone who
+  // has ever read this file - fail loud at startup instead.
+  jwtSecret: required("JWT_SECRET"),
   adminSessionCookieName: process.env.ADMIN_SESSION_COOKIE_NAME ?? "adms_admin",
   adminBootstrapEmail: process.env.ADMIN_BOOTSTRAP_EMAIL,
   adminBootstrapPassword: process.env.ADMIN_BOOTSTRAP_PASSWORD,

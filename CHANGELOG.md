@@ -12,6 +12,51 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.10.0] - 2026-08-18
+
+### Added
+
+- Full end-to-end security test suite (`tests/security/`, 240 new tests
+  across 4 files) driving the real Express app + a live Postgres DB via
+  supertest, no mocking: every protected route rejects a missing/garbage/
+  forged/expired session (`authRequired.spec.ts`), every super_admin-only
+  action 403s a real company_admin session (`roleAuthorization.spec.ts`),
+  cross-company IDOR coverage on every resource type
+  (`crossCompanyIsolation.spec.ts`), and hostile-JSON fuzzing across every
+  create/update endpoint - wrong types, mass-assignment attempts, SQLi-
+  shaped strings, prototype-pollution keys, malformed JSON, oversized
+  payloads (`inputValidation.spec.ts`).
+- `src/app.ts`: extracted the Express app construction out of `server.ts`
+  into a `buildApp()` factory with no port binding, so the test suite above
+  can exercise the real middleware stack in-process.
+- `src/utils/ssrfGuard.ts`: rejects a device `webhookUrl` that resolves to
+  a loopback/RFC1918/link-local/cloud-metadata address, checked at
+  create/update time and again at dispatch time (both the real worker send
+  and the on-demand "Send test webhook" button).
+- `docker-compose.yml`: publishes postgres to `127.0.0.1:5432` so the new
+  test suite (and `prisma migrate dev`) can reach it from the host.
+
+### Fixed
+
+- **SSRF via webhook URL** (found by the security review above): any
+  authenticated company_admin — including a brand-new, unvetted
+  self-signup — could point a device's `webhookUrl` at an internal address
+  (loopback, a private-network host, the cloud metadata endpoint) and, via
+  "Send test webhook," get the response echoed straight back to them. Now
+  blocked by `ssrfGuard.ts`; see the new "Webhook delivery" note in the
+  README for the residual DNS-rebinding caveat.
+- **JWT_SECRET silently defaulted to a hardcoded, publicly-known string**
+  if the env var was unset - a deployment that forgot to set it would boot
+  fine and sign every admin session (including super_admin) with a secret
+  anyone could read in this repo. Now required at startup with no
+  fallback; the server refuses to boot rather than run insecurely.
+- **Malformed/oversized request bodies returned a generic 500** instead of
+  the 400/413 body-parser had already correctly determined - the shared
+  `errorHandler` was discarding any status code already attached to an
+  error (JSON syntax errors, payload-too-large) and collapsing everything
+  to "Internal server error." Now passes through a well-formed 4xx as-is
+  and only escalates genuinely unexpected errors to 500.
+
 ## [2.9.1] - 2026-08-17
 
 ### Fixed

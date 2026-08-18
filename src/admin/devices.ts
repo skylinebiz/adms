@@ -11,6 +11,7 @@ import { renderHeaders, SAMPLE_TEMPLATE_VARS } from "../webhooks/template";
 import { OPTIONS_LIMIT, paginationQuerySchema } from "../utils/pagination";
 import { isValidTimeZone } from "../adms/timezone";
 import { computeDeviceStatus } from "../utils/deviceStatus";
+import { isSafeWebhookUrl } from "../utils/ssrfGuard";
 
 export const devicesRouter = Router();
 
@@ -344,6 +345,14 @@ devicesRouter.post("/", async (req, res) => {
     return;
   }
 
+  if (parsed.data.webhookUrl) {
+    const check = await isSafeWebhookUrl(parsed.data.webhookUrl);
+    if (!check.safe) {
+      res.status(400).json({ error: check.reason });
+      return;
+    }
+  }
+
   const device = await prisma.device
     .create({
       data: {
@@ -398,6 +407,14 @@ devicesRouter.patch("/:id", async (req, res) => {
     return;
   }
 
+  if (parsed.data.webhookUrl) {
+    const check = await isSafeWebhookUrl(parsed.data.webhookUrl);
+    if (!check.safe) {
+      res.status(400).json({ error: check.reason });
+      return;
+    }
+  }
+
   const { regenerateSecret, ...rest } = parsed.data;
   const data: Record<string, unknown> = { ...rest };
   if ("webhookHeaders" in rest) data.webhookHeaders = toJsonInput(rest.webhookHeaders);
@@ -444,6 +461,11 @@ devicesRouter.post("/:id/test-webhook", async (req, res) => {
   const url = parsed.data.url ?? device.webhookUrl;
   if (!url) {
     res.status(400).json({ error: "No webhook URL configured or provided" });
+    return;
+  }
+  const check = await isSafeWebhookUrl(url);
+  if (!check.safe) {
+    res.status(400).json({ error: check.reason });
     return;
   }
   const secret = parsed.data.secret !== undefined ? parsed.data.secret : device.webhookSecret;

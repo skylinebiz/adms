@@ -6,6 +6,12 @@ services:
       POSTGRES_USER: adms
       POSTGRES_PASSWORD: adms
       POSTGRES_DB: adms
+    ports:
+      # Localhost-only, so `npm test`/`prisma migrate dev` running on the
+      # host (not inside a container) can reach it - matches DATABASE_URL
+      # in .env.example. Bound to 127.0.0.1 rather than every interface so
+      # this dev DB is never reachable from outside the host machine.
+      - "127.0.0.1:5432:5432"
     volumes:
       - adms_pgdata:/var/lib/postgresql/data
     healthcheck:

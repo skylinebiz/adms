@@ -397,6 +397,19 @@ The Devices list itself never shows the URL, not even masked — just
 whether a webhook is configured and, if so, whether it's enabled. When
 set, every captured punch is POSTed as JSON to that URL:
 
+Since this is the server itself making an outbound request to a URL any
+company_admin controls, a URL that resolves to a loopback, RFC1918/private,
+link-local, or the cloud metadata address (`169.254.169.254`) is rejected
+at save time and at send time (`src/utils/ssrfGuard.ts`) — otherwise this
+would be a straightforward SSRF primitive, especially via the "Send test
+webhook" button, which echoes the response straight back to the caller.
+The guard checks the resolved IP at the moment of the request; it does not
+pin that IP for the `fetch()` that follows, so it doesn't fully close a
+DNS-rebinding attack (attacker controls the domain, flips its DNS record
+between the check and the request) — worth hardening further if this ever
+needs to be airtight against a determined attacker rather than block the
+obvious payloads.
+
 ```json
 {
   "event": "punch.created",
@@ -673,7 +686,7 @@ See [`.env.example`](.env.example) for the full list. Notable ones:
 | Variable | Purpose |
 | --- | --- |
 | `DATABASE_URL` | Postgres connection string |
-| `JWT_SECRET` | Signs admin session cookies — must be a real secret |
+| `JWT_SECRET` | Signs admin session cookies — required, no default; the server refuses to start without it rather than silently signing every session (including super-admin ones) with a well-known fallback |
 | `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` | One-time seed for the first super-admin |
 | `ADMS_MAX_BODY_SIZE` | Max device-facing request body size (default `10mb`) — see [ADMS response codes](#adms-response-codes-and-retry-behavior) |
 | `DEVICE_OFFLINE_THRESHOLD_MS` | How long (ms) after last contact a device is still shown as ONLINE (default `300000` = 5 min) — see [Device online/offline status](#device-onlineoffline-status) |
@@ -695,3 +708,33 @@ resolution logic, the webhook body/header templating engine, company slug
 format validation, and the DB error classifier that decides retry-vs-drop
 for storage failures (`classifyDbError` — see
 [ADMS response codes](#adms-response-codes-and-retry-behavior)).
+
+### Security test suite (`tests/security/`)
+
+Real end-to-end HTTP tests against the actual Express app and a live
+Postgres database (via [supertest](https://github.com/ladjs/supertest), no
+mocking) - unlike the pure-function unit tests above, these need
+`postgres` reachable at `localhost:5432` (`docker compose up -d postgres`
+covers it; the compose file publishes that port to `127.0.0.1` only, for
+exactly this). Every fixture they create is tagged with a per-run ID and
+deleted in `afterAll`, so a run never leaves data behind.
+
+- **`authRequired.spec.ts`** - every protected route rejects a missing,
+  garbage, wrong-secret-forged, `alg: none`, or expired session token, for
+  every method+path in the admin API.
+- **`roleAuthorization.spec.ts`** - every super_admin-only action 403s a
+  real, validly-authenticated COMPANY_ADMIN session.
+- **`crossCompanyIsolation.spec.ts`** - IDOR coverage: a COMPANY_ADMIN can
+  never read, list, or modify another company's devices, admin users, or
+  punch records by ID, even via an explicit `?companyId=` override or a
+  spoofed `companyId` in a request body.
+- **`inputValidation.spec.ts`** - malformed/hostile JSON across create and
+  update endpoints: wrong types, missing/extra fields, mass-assignment
+  attempts (role escalation, `id`/`companyId` override), SQL-injection-
+  shaped strings, prototype-pollution key names, non-object top-level
+  bodies, malformed JSON syntax, and oversized payloads - each must produce
+  a clean 400/413, never a 500 or a bypass.
+- **`ssrfWebhook.spec.ts`** - a device's `webhookUrl` (settable by any
+  COMPANY_ADMIN) can't be pointed at loopback, RFC1918, link-local, or the
+  cloud metadata address, on create, update, or the on-demand test-webhook
+  endpoint.
