@@ -179,6 +179,11 @@ export interface PunchRecord {
   webhookDeliveredAt: string | null;
   webhookHeld: boolean;
   webhookStatus: "delivered" | "pending" | "failed" | "not_applicable";
+  // Whether the owning device currently has an active (enabled + URL set)
+  // webhook - drives whether "Retry now" is clickable, since retrying
+  // without one just queues the record without the worker ever picking it
+  // back up.
+  canRetry: boolean;
   device?: { id: string; serialNumber: string; label: string | null; companyId: string };
 }
 

@@ -12,6 +12,39 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.12.0] - 2026-08-19
+
+### Fixed
+
+- **Removing or disabling a device's webhook flipped every one of its
+  pending/failed punch records to "NA"**, discarding whether they'd
+  actually been attempted. `computeStatus`/`statusCondition` derived
+  "not_applicable" from the device's *current* webhook config, which wins
+  over attempt history unconditionally - so a record that had exhausted
+  all retries (or was simply mid-backoff) looked identical to one that had
+  genuinely never been attempted, the moment the webhook was removed. This
+  also meant the "Failed Webhooks" page could show rows badged "NA" (its
+  own listing query is independent of device state, so the records stayed
+  listed - only the badge was wrong), and filtering the main list by
+  `?status=failed` made those same records disappear. Fixed: "not
+  applicable" is now reserved for records that never had a webhook to try
+  (held at ingestion, or zero attempts before one was ever configured) -
+  anything with at least one real attempt keeps reporting "failed" or
+  "pending" based on its own history, regardless of what the device's
+  webhook config looks like right now. A still-mid-backoff record whose
+  webhook gets pulled out from under it is now reported as "failed" (with
+  its last error), not silently downgraded to "pending" or "NA".
+- **"Retry now" stayed clickable with no active webhook to retry against**,
+  including the pre-existing case (unrelated to the bug above) of a device
+  that never had a webhook configured at all - the worker's claim query
+  requires an active webhook, so clicking just queued the record and the
+  API returned a hollow `{ok:true}` that would never actually fire. The
+  button is now disabled (with a tooltip) whenever the device has no
+  active webhook, and `POST /:id/retry` / `POST /retry-bulk` reject or
+  silently exclude such records server-side too, since a disabled button
+  is a UI nicety, not a substitute for the API refusing to lie about what
+  it just queued.
+
 ## [2.11.0] - 2026-08-18
 
 ### Fixed

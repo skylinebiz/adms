@@ -206,7 +206,12 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
                         Log
                       </button>
                       {r.webhookStatus !== "delivered" && (
-                        <button className="btn btn-sm" onClick={() => retryOne(r.id)}>
+                        <button
+                          className="btn btn-sm"
+                          disabled={!r.canRetry}
+                          title={r.canRetry ? undefined : "This device has no active webhook configured"}
+                          onClick={() => retryOne(r.id)}
+                        >
                           Retry now
                         </button>
                       )}

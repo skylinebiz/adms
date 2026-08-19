@@ -8,26 +8,43 @@ import { paginationQuerySchema } from "../utils/pagination";
 
 export const punchRecordsRouter = Router();
 
-type WebhookStatus = "delivered" | "pending" | "failed" | "not_applicable";
+export type WebhookStatus = "delivered" | "pending" | "failed" | "not_applicable";
 
-interface DeviceWebhookInfo {
+export interface DeviceWebhookInfo {
   webhookUrl: string | null;
   webhookEnabled: boolean;
 }
 
 const deviceSelect = { id: true, serialNumber: true, label: true, companyId: true, webhookUrl: true, webhookEnabled: true };
 
-// "not_applicable" covers two cases that both mean "nothing will happen
-// automatically right now": the record was held back at ingestion because
-// the device had no webhook yet, or the device currently has no webhook
-// (regardless of held) - e.g. it was disabled after previously failing.
-function computeStatus(
+export function hasActiveWebhook(device: DeviceWebhookInfo): boolean {
+  return device.webhookEnabled && Boolean(device.webhookUrl);
+}
+
+// "not_applicable" means nothing has EVER been attempted and nothing can be
+// right now - either it was held back at ingestion (no webhook existed
+// then, never since retried), or it had a webhook at ingestion but got
+// removed/disabled before the worker's first attempt ever fired (attempts
+// still 0, no log to show). Anything that has actually been attempted at
+// least once keeps reporting on that history regardless of the device's
+// CURRENT webhook config: reaching webhookMaxAttempts is "failed" as
+// before, and - this is the fix - so is a still-mid-backoff record whose
+// device no longer has an active webhook to continue retrying against.
+// Without this, removing/disabling a device's webhook used to silently
+// flip every one of its pending AND failed records to NA, discarding the
+// distinction between "never had a shot" and "tried and failed" - and left
+// "Retry now" clickable in every one of those states even though the
+// worker's own claim query (see claimBatch in worker.ts) requires an
+// active webhook and would just silently never pick the row back up.
+export function computeStatus(
   record: { webhookDelivered: boolean; webhookAttempts: number; webhookHeld: boolean },
   device: DeviceWebhookInfo
 ): WebhookStatus {
   if (record.webhookDelivered) return "delivered";
-  const hasWebhook = device.webhookEnabled && Boolean(device.webhookUrl);
-  if (record.webhookHeld || !hasWebhook) return "not_applicable";
+  if (record.webhookHeld) return "not_applicable";
+  if (!hasActiveWebhook(device)) {
+    return record.webhookAttempts > 0 ? "failed" : "not_applicable";
+  }
   if (record.webhookAttempts >= config.webhookMaxAttempts) return "failed";
   return "pending";
 }
@@ -44,32 +61,43 @@ function serializeRecord<
   return {
     ...rest,
     webhookStatus: computeStatus(record, device),
+    // Drives whether "Retry now" is clickable in the admin panel - retrying
+    // is a genuine dead end (queued but never claimed by the worker) with
+    // no active webhook on the device, regardless of what status is shown.
+    canRetry: hasActiveWebhook(device),
     device: { id: device.id, serialNumber: device.serialNumber, label: device.label, companyId: device.companyId },
   };
 }
 
-function statusCondition(status: WebhookStatus | undefined): Prisma.PunchRecordWhereInput {
+// Mirrors computeStatus's rule above at the query level, so filtering by
+// ?status= agrees with the badge computeStatus assigns the same record.
+export function statusCondition(status: WebhookStatus | undefined): Prisma.PunchRecordWhereInput {
   if (status === "delivered") return { webhookDelivered: true };
+  const noActiveWebhook: Prisma.PunchRecordWhereInput = {
+    device: { OR: [{ webhookEnabled: false }, { webhookUrl: null }] },
+  };
+  const hasActiveWebhookCond: Prisma.PunchRecordWhereInput = { device: { webhookEnabled: true, webhookUrl: { not: null } } };
   if (status === "not_applicable") {
     return {
       webhookDelivered: false,
-      OR: [{ webhookHeld: true }, { device: { OR: [{ webhookEnabled: false }, { webhookUrl: null }] } }],
+      OR: [{ webhookHeld: true }, { AND: [noActiveWebhook, { webhookAttempts: 0 }] }],
     };
   }
   if (status === "failed") {
     return {
       webhookDelivered: false,
       webhookHeld: false,
-      device: { webhookEnabled: true, webhookUrl: { not: null } },
-      webhookAttempts: { gte: config.webhookMaxAttempts },
+      OR: [
+        { webhookAttempts: { gte: config.webhookMaxAttempts } },
+        { AND: [noActiveWebhook, { webhookAttempts: { gt: 0 } }] },
+      ],
     };
   }
   if (status === "pending") {
     return {
       webhookDelivered: false,
       webhookHeld: false,
-      device: { webhookEnabled: true, webhookUrl: { not: null } },
-      webhookAttempts: { lt: config.webhookMaxAttempts },
+      AND: [hasActiveWebhookCond, { webhookAttempts: { lt: config.webhookMaxAttempts } }],
     };
   }
   return {};
@@ -235,6 +263,15 @@ punchRecordsRouter.post("/:id/retry", async (req, res) => {
     res.status(404).json({ error: "Not found" });
     return;
   }
+  // The UI disables "Retry now" for this case, but the API must not trust
+  // that - without an active webhook, queuing this just sets nextAttemptAt
+  // to a value the worker's claim query (which requires webhookEnabled +
+  // webhookUrl) will never actually pick up. A silent {ok:true} that does
+  // nothing is worse than telling the caller why.
+  if (!hasActiveWebhook(record.device)) {
+    res.status(400).json({ error: "This device has no active webhook configured - nothing to retry" });
+    return;
+  }
   await resetForRetry([record.id]);
   res.json({ ok: true });
 });
@@ -249,14 +286,19 @@ punchRecordsRouter.post("/retry-bulk", async (req, res) => {
   }
 
   const scope = resolveCompanyScope(req, undefined);
-  const visibleIds = scope.all
-    ? parsed.data.ids
-    : (
-        await prisma.punchRecord.findMany({
-          where: { id: { in: parsed.data.ids }, device: { companyId: scope.companyId } },
-          select: { id: true },
-        })
-      ).map((r) => r.id);
+  // Same eligibility rule as the single-record route above, applied as a
+  // query filter - ids outside the caller's company scope (when scoped) or
+  // whose device currently has no active webhook are silently dropped from
+  // "retried" rather than erroring the whole batch, same as the existing
+  // cross-company handling this already did.
+  const deviceFilter = scope.all
+    ? { webhookEnabled: true, webhookUrl: { not: null } }
+    : { companyId: scope.companyId, webhookEnabled: true, webhookUrl: { not: null } };
+  const eligible = await prisma.punchRecord.findMany({
+    where: { id: { in: parsed.data.ids }, device: deviceFilter },
+    select: { id: true },
+  });
+  const visibleIds = eligible.map((r) => r.id);
 
   await resetForRetry(visibleIds);
   res.json({ ok: true, retried: visibleIds.length });

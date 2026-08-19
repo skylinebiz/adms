@@ -219,6 +219,14 @@ describe("company_admin cannot write to another company's resources", () => {
 
   it("POST /punch-records/retry-bulk with a MIXED array (one own, one foreign) processes only the own one, not zero and not both", async () => {
     const deviceA = await createDevice(companyA.id);
+    // retry-bulk now requires an active webhook to count a record as
+    // eligible (see tests/webhookRetryEligibility.spec.ts) - this test is
+    // about company scoping, not webhook eligibility, so give it one so it
+    // stays eligible on that axis.
+    await prisma.device.update({
+      where: { id: deviceA.id },
+      data: { webhookEnabled: true, webhookUrl: "https://example.com/hook" },
+    });
     const farFuture = new Date("2099-01-01T00:00:00Z"); // parked, same as worker.ts's PARKED_NEXT_ATTEMPT
     const punchA = await prisma.punchRecord.create({
       data: {
