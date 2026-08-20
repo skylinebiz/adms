@@ -28,10 +28,11 @@ export const erpnextEmployeeCheckin: WebhookTemplate = {
     // ISO8601 - see punch_time_frappe in src/webhooks/template.ts.
     timestamp: "{{punch_time_frappe}}",
     device_id: "{{device_serial}}",
-    // "Auto" lets ERPNext infer IN/OUT by alternating, since this
-    // device's status-code convention for IN vs OUT isn't knowable here -
-    // change to "IN"/"OUT" (or bind to {{status}}) if you know it.
-    log_type: "Auto",
+    // Blank lets ERPNext infer IN/OUT by alternating - log_type is a
+    // Select field limited to blank/"IN"/"OUT", so "Auto" (the old
+    // default here) was rejected. Set to "IN"/"OUT" if you know this
+    // device's convention.
+    log_type: "",
   },
   helpText:
     'Replace "YOUR-SITE", "YOUR_API_KEY", and "YOUR_API_SECRET" above with your real values. ' +
@@ -39,6 +40,6 @@ export const erpnextEmployeeCheckin: WebhookTemplate = {
     'If your ERPNext version predates the separate HRMS app, change "hrms" to "erpnext" in the URL. ' +
     'employee_field_value must match each employee\'s "Attendance Device ID" field (Employee doctype) - ' +
     "set that to this device's PIN for each person. " +
-    'log_type defaults to "Auto" (ERPNext infers IN/OUT by alternating) - set it explicitly if you know ' +
+    'log_type defaults to blank (ERPNext infers IN/OUT by alternating) - set it to "IN"/"OUT" if you know ' +
     "this device's status-code convention.",
 };

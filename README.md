@@ -549,7 +549,7 @@ To use it:
 4. If your ERPNext predates the separate HRMS app (pre-v14-ish), change
    `hrms` to `erpnext` in the prefilled URL.
 
-The prefilled body sends `log_type: "Auto"`, letting ERPNext infer IN/OUT
+The prefilled body sends `log_type: ""`, letting ERPNext infer IN/OUT
 by alternating, since this device's actual IN/OUT status-code convention
 isn't something a generic template can know — change it to `"IN"` /
 `"OUT"` (or bind it to `{{status}}`) once you know your device's

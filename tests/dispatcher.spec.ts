@@ -46,7 +46,7 @@ describe("erpnext webhook template", () => {
       employee_field_value: SAMPLE_TEMPLATE_VARS.pin,
       timestamp: SAMPLE_TEMPLATE_VARS.punch_time_frappe,
       device_id: SAMPLE_TEMPLATE_VARS.device_serial,
-      log_type: "Auto",
+      log_type: "",
     });
   });
 

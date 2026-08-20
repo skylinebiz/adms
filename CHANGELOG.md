@@ -12,6 +12,15 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.12.1] - 2026-08-19
+
+### Fixed
+
+- ERPNext webhook template sent `log_type: "Auto"`, an invalid value -
+  Employee Checkin's `log_type` is a Select field limited to blank/`IN`/
+  `OUT`. Changed to `log_type: ""` (blank), which is what actually makes
+  ERPNext infer IN/OUT by alternating.
+
 ## [2.12.0] - 2026-08-19
 
 ### Fixed
