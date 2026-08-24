@@ -12,6 +12,40 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.13.0] - 2026-08-24
+
+### Added
+
+- **Data retention policy.** A new platform-wide `PlatformSettings`
+  singleton (default `dataRetentionDays: 30`) editable from a new
+  super-admin-only **Settings** page. A background sweep in `worker.ts`
+  (hourly, plus once on startup) permanently deletes punch/attendance
+  records (and their cascaded webhook delivery history), Raw Data Dump
+  entries, Raw Request Log entries, Unregistered Devices ping history,
+  and device command history older than the configured window.
+  Companies, devices, admin accounts, and pending (unclaimed) device
+  summaries are never touched, regardless of age. New `GET`/`PATCH
+  /api/admin/settings` (super_admin only); the deletion logic itself is
+  `runRetentionSweep()` in the new `src/retentionSweep.ts`, kept separate
+  from `worker.ts` so it's importable (by tests, or anything else)
+  without triggering `worker.ts`'s own `main().catch(...)` side effect.
+- README: documented the new feature, and that
+  [adms.adrk.in](https://adms.adrk.in) runs a 10-day retention window
+  (not the 30-day default) plus its other non-secret env var defaults,
+  for anyone integrating against the hosted instance.
+
+### Fixed
+
+- **Test fixture leak**: `tests/helpers/securityTestApp.ts`'s
+  `cleanupAll()` relied on cascading a company delete to clean up admin
+  fixtures, which never reaches a `SUPER_ADMIN` fixture (`companyId` is
+  always `null` for that role, by definition never attached to any
+  company). Every super_admin fixture created across every prior test
+  run had been leaking into the database indefinitely - 29 orphaned
+  `admin-sectest-*@example.test` rows had accumulated over the course of
+  this project's testing and were cleaned up. `cleanupAll()` now deletes
+  by tagged email directly, independent of company cascade.
+
 ## [2.12.1] - 2026-08-19
 
 ### Fixed

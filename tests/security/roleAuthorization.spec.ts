@@ -130,6 +130,19 @@ describe("super_admin-only actions reject a COMPANY_ADMIN session with 403", () 
       .send({ ids: ["x"] });
     expect(bulk.status).toBe(403);
   });
+
+  it("GET /settings - platform-wide config isn't even readable by a company_admin", async () => {
+    const res = await request(app).get("/api/admin/settings").set("Cookie", companyAdmin.cookie);
+    expect(res.status).toBe(403);
+  });
+
+  it("PATCH /settings", async () => {
+    const res = await request(app)
+      .patch("/api/admin/settings")
+      .set("Cookie", companyAdmin.cookie)
+      .send({ dataRetentionDays: 1 });
+    expect(res.status).toBe(403);
+  });
 });
 
 describe("the same actions succeed (pass the role gate) for a real SUPER_ADMIN session", () => {

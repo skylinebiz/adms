@@ -6,6 +6,7 @@ import { prisma } from "./db/client";
 import { config } from "./config";
 import { appLogger as logger } from "./logger";
 import { dispatchPunchWebhook } from "./webhooks/dispatcher";
+import { runRetentionSweep } from "./retentionSweep";
 
 // Backoff schedule indexed by attempt number (1-based): 30s, 2m, 10m, 1h, 6h.
 const BACKOFF_SCHEDULE_MS = [30_000, 120_000, 600_000, 3_600_000, 21_600_000];
@@ -117,6 +118,23 @@ async function processPunchRecord(id: string) {
   }
 }
 
+// The actual deletion logic lives in ./retentionSweep (kept out of this
+// file so it can be imported without pulling in this file's own
+// `main().catch(...)` side effect below). This is just the "is a sweep
+// actually due yet" gate, checked once per tick against a coarse
+// timestamp rather than a separate setInterval, so it shares this
+// single-flight loop and can never overlap a tick still in flight -
+// there's no reason to re-check "anything expired yet" every few seconds
+// when the unit is days.
+const RETENTION_SWEEP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+let nextRetentionSweepAt = 0; // due immediately on the very first tick
+
+async function runRetentionSweepIfDue() {
+  if (Date.now() < nextRetentionSweepAt) return;
+  nextRetentionSweepAt = Date.now() + RETENTION_SWEEP_INTERVAL_MS;
+  await runRetentionSweep();
+}
+
 let stopping = false;
 
 async function tick() {
@@ -135,6 +153,12 @@ async function tick() {
     }
   } catch (err) {
     logger.error({ err }, "worker tick failed");
+  }
+
+  try {
+    await runRetentionSweepIfDue();
+  } catch (err) {
+    logger.error({ err }, "data retention sweep failed");
   }
 }
 

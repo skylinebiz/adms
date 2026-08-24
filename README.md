@@ -405,6 +405,32 @@ selection) — **super admin only**, even for a company_admin's own data, since
 these are audit/attendance history and deletion is irreversible. Deleting a
 punch record cascades to its webhook delivery attempt history.
 
+### Data retention
+
+Beyond manual deletion above, the platform also **automatically and
+permanently deletes** anything older than a configurable retention
+window — **admin panel → Settings → Data retention**, super admin only,
+platform-wide (one value, applies across every company). Default:
+**30 days**. In scope: punch/attendance records (and their cascaded
+webhook delivery history), Raw Data Dump entries, Raw Request Log
+entries, Unregistered Devices ping history, and device command history.
+Companies, devices, and admin accounts are never touched, regardless of
+age.
+
+A background sweep in `worker.ts` enforces this once an hour (and once
+immediately on worker startup) — there is no manual trigger and no undo.
+Lowering the value takes effect on the next sweep, not retroactively
+against anything already past the *old* window but not yet past the new
+one.
+
+**[adms.adrk.in](https://adms.adrk.in) runs a 10-day retention window**,
+not the 30-day default — if you're integrating against the hosted
+instance, make sure your receiving server actually consumes (or your own
+webhook successfully delivers) punch data within 10 days of it being
+captured. Past that window the underlying record is gone, not just the
+delivery attempt, so retrying a failed webhook past that point has
+nothing left to retry.
+
 ## Webhook delivery
 
 Each device has its own `webhookUrl` + `webhookSecret` + `webhookEnabled`
@@ -705,12 +731,30 @@ See [`.env.example`](.env.example) for the full list. Notable ones:
 | Variable                                             | Purpose                                                                                                                                                                                       |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DATABASE_URL`                                       | Postgres connection string                                                                                                                                                                    |
-| `JWT_SECRET`                                         | Signs admin session cookies — required, no default; the server refuses to start without it rather than silently signing every session (including super-admin ones) with a well-known fallback |
+| `JWT_SECRET`                                         | Signs admin session cookies — required, no default (server won't start without it)                                                                                                             |
 | `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` | One-time seed for the first super-admin                                                                                                                                                       |
 | `ADMS_MAX_BODY_SIZE`                                 | Max device-facing request body size (default `10mb`) — see [ADMS response codes](#adms-response-codes-and-retry-behavior)                                                                     |
 | `DEVICE_OFFLINE_THRESHOLD_MS`                        | How long (ms) after last contact a device is still shown as ONLINE (default `300000` = 5 min) — see [Device online/offline status](#device-onlineoffline-status)                              |
 | `WEBHOOK_MAX_ATTEMPTS`                               | Retries before a punch is marked "failed" in the admin panel                                                                                                                                  |
 | `WORKER_POLL_INTERVAL_MS` / `WORKER_BATCH_SIZE`      | How often / how many rows the worker claims per tick                                                                                                                                          |
+
+Data retention (default 30 days) is **not** an env var — it's a
+platform-wide setting stored in the database, changed from the admin
+panel (**Settings**, super admin only), not `.env`. See [Data
+retention](#data-retention) above.
+
+### adms.adrk.in's configuration
+
+If you're integrating against the hosted instance rather than
+self-hosting, its non-secret configuration (so you know what to expect
+without needing to ask):
+
+- **Data retention: 10 days**, not the 30-day default — see [Data
+  retention](#data-retention) above.
+- Everything else above runs at its documented default:
+  `ADMS_MAX_BODY_SIZE=10mb`, `DEVICE_OFFLINE_THRESHOLD_MS=300000` (5 min),
+  `WEBHOOK_MAX_ATTEMPTS=5`, `WEBHOOK_TIMEOUT_MS=8000`,
+  `WORKER_POLL_INTERVAL_MS=3000`, `WORKER_BATCH_SIZE=50`.
 
 ## Tests
 
@@ -724,9 +768,14 @@ must never drop the rest of a batch or crash the request), the device
 timezone conversion (`isValidTimeZone` / `zonedWallClockToUtc`, including
 DST spring-forward/fall-back edge cases), the per-device URL secret
 resolution logic, the webhook body/header templating engine, company slug
-format validation, and the DB error classifier that decides retry-vs-drop
+format validation, the DB error classifier that decides retry-vs-drop
 for storage failures (`classifyDbError` — see
-[ADMS response codes](#adms-response-codes-and-retry-behavior)).
+[ADMS response codes](#adms-response-codes-and-retry-behavior)), and the
+data retention sweep (`tests/retention.spec.ts` for the cutoff-date math,
+`tests/dataRetention.spec.ts` for the `/settings` API and an end-to-end
+run of `runRetentionSweep()` against real rows - confirms exactly what
+gets deleted past the window and what doesn't, including that Devices/
+Companies/AdminUsers/PendingDevice are never touched).
 
 ### Security test suite (`tests/security/`)
 

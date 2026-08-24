@@ -74,6 +74,9 @@ const PROTECTED_ENDPOINTS: Endpoint[] = [
   { method: "delete", path: `/api/admin/raw-requests/${PLACEHOLDER}` },
   // webhookTemplates.ts
   { method: "get", path: "/api/admin/webhook-templates" },
+  // settings.ts
+  { method: "get", path: "/api/admin/settings" },
+  { method: "patch", path: "/api/admin/settings" },
 ];
 
 function expiredToken(): string {

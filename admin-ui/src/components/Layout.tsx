@@ -66,6 +66,7 @@ export default function Layout() {
             <NavLink to="/raw-data">Raw Data Dump</NavLink>
             {user.role === "SUPER_ADMIN" && <NavLink to="/raw-requests">Raw Request Log</NavLink>}
             <NavLink to="/admin-users">Admin Users</NavLink>
+            {user.role === "SUPER_ADMIN" && <NavLink to="/settings">Settings</NavLink>}
             <NavLink to="/change-password">Change Password</NavLink>
           </nav>
           <div className="user-info">

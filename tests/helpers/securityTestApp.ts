@@ -83,9 +83,16 @@ export async function cleanupAll(): Promise<void> {
   // Company delete cascades to AdminUser/Device/PendingDevice (and Device's
   // delete cascades further to PunchRecord/DeviceCommand/DeviceRawLog, and
   // PunchRecord's to WebhookDelivery) per the schema's onDelete: Cascade -
-  // one delete clears the whole fixture tree. RawRequestLog/
-  // UnregisteredDevicePing have no FK to Company (they're keyed by SN, not
-  // company), so anything a test created there needs its own cleanup.
+  // one delete clears the whole fixture tree for anything actually
+  // attached to a tagged company. A SUPER_ADMIN fixture has companyId:
+  // null by definition, though - never attached to any company, so the
+  // cascade above can never reach it. Deleted directly here instead
+  // (harmless overlap with the cascade for COMPANY_ADMIN fixtures, whose
+  // email also contains RUN_TAG). Without this, every super_admin fixture
+  // created across every test run leaks forever - confirmed: dozens of
+  // orphaned `admin-sectest-*@example.test` SUPER_ADMIN rows had piled up
+  // in the dev DB from earlier sessions before this fix.
+  await prisma.adminUser.deleteMany({ where: { email: { contains: RUN_TAG } } });
   await prisma.company.deleteMany({ where: { slug: { contains: RUN_TAG } } });
   await prisma.rawRequestLog.deleteMany({ where: { serialNumber: { contains: RUN_TAG } } });
   await prisma.unregisteredDevicePing.deleteMany({ where: { serialNumber: { contains: RUN_TAG } } });

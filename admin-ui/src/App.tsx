@@ -11,6 +11,7 @@ import FailedWebhooks from "./pages/FailedWebhooks";
 import AdminUsers from "./pages/AdminUsers";
 import RawDataDump from "./pages/RawDataDump";
 import RawRequestLogPage from "./pages/RawRequestLogPage";
+import Settings from "./pages/Settings";
 import RequireSuperAdmin from "./components/RequireSuperAdmin";
 import { useAuth } from "./context/AuthContext";
 
@@ -36,6 +37,14 @@ export default function App() {
           element={
             <RequireSuperAdmin>
               <RawRequestLogPage />
+            </RequireSuperAdmin>
+          }
+        />
+        <Route
+          path="settings"
+          element={
+            <RequireSuperAdmin>
+              <Settings />
             </RequireSuperAdmin>
           }
         />

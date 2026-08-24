@@ -6,6 +6,7 @@ import { devicesRouter } from "./devices";
 import { punchRecordsRouter } from "./punchRecords";
 import { rawRequestsRouter } from "./rawRequests";
 import { webhookTemplatesRouter } from "./webhookTemplates";
+import { settingsRouter } from "./settings";
 import { requireAdminAuth } from "../middleware/requireAdminAuth";
 import { APP_VERSION } from "../version";
 
@@ -29,3 +30,6 @@ adminApiRouter.use("/punch-records", requireAdminAuth, punchRecordsRouter);
 // requireAdminAuth here.
 adminApiRouter.use("/raw-requests", requireAdminAuth, rawRequestsRouter);
 adminApiRouter.use("/webhook-templates", requireAdminAuth, webhookTemplatesRouter);
+// settingsRouter applies its own requireSuperAdmin internally, on top of
+// requireAdminAuth here.
+adminApiRouter.use("/settings", requireAdminAuth, settingsRouter);
