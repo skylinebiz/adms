@@ -15,7 +15,7 @@ import {
 
 let company: TestCompany;
 let superAdmin: TestAdmin;
-let originalRetentionDays: number;
+let originalSettings: { dataRetentionDays: number; webhookMaxAttempts: number; webhookTimeoutMs: number };
 
 beforeAll(async () => {
   company = await createCompany();
@@ -25,7 +25,11 @@ beforeAll(async () => {
     update: {},
     create: { id: "singleton" },
   });
-  originalRetentionDays = settings.dataRetentionDays;
+  originalSettings = {
+    dataRetentionDays: settings.dataRetentionDays,
+    webhookMaxAttempts: settings.webhookMaxAttempts,
+    webhookTimeoutMs: settings.webhookTimeoutMs,
+  };
 });
 
 // PlatformSettings is a single global row shared by the whole DB (unlike
@@ -35,7 +39,7 @@ beforeAll(async () => {
 afterEach(async () => {
   await prisma.platformSettings.update({
     where: { id: "singleton" },
-    data: { dataRetentionDays: originalRetentionDays },
+    data: originalSettings,
   });
 });
 
@@ -78,8 +82,37 @@ describe("GET/PATCH /settings", () => {
     expect(res.status).toBe(400);
   });
 
-  it("rejects a missing dataRetentionDays field", async () => {
+  it("rejects a completely empty body (every field is individually optional, but at least one must be present)", async () => {
     const res = await request(app).patch("/api/admin/settings").set("Cookie", superAdmin.cookie).send({});
+    expect(res.status).toBe(400);
+  });
+
+  it("updates webhookMaxAttempts/webhookTimeoutMs independently of dataRetentionDays (a genuine partial update)", async () => {
+    const before = await request(app).get("/api/admin/settings").set("Cookie", superAdmin.cookie);
+    const patchRes = await request(app)
+      .patch("/api/admin/settings")
+      .set("Cookie", superAdmin.cookie)
+      .send({ webhookMaxAttempts: 8, webhookTimeoutMs: 15000 });
+    expect(patchRes.status).toBe(200);
+    expect(patchRes.body.settings.webhookMaxAttempts).toBe(8);
+    expect(patchRes.body.settings.webhookTimeoutMs).toBe(15000);
+    // dataRetentionDays untouched by a request that never mentioned it
+    expect(patchRes.body.settings.dataRetentionDays).toBe(before.body.settings.dataRetentionDays);
+  });
+
+  it.each([0, -1, 1.5, 51])("rejects an out-of-range webhookMaxAttempts: %p", async (value) => {
+    const res = await request(app)
+      .patch("/api/admin/settings")
+      .set("Cookie", superAdmin.cookie)
+      .send({ webhookMaxAttempts: value });
+    expect(res.status).toBe(400);
+  });
+
+  it.each([0, 999, 1.5, 120_001])("rejects an out-of-range webhookTimeoutMs: %p", async (value) => {
+    const res = await request(app)
+      .patch("/api/admin/settings")
+      .set("Cookie", superAdmin.cookie)
+      .send({ webhookTimeoutMs: value });
     expect(res.status).toBe(400);
   });
 });

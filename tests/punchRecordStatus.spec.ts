@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { computeStatus, hasActiveWebhook, statusCondition } from "../src/admin/punchRecords";
-import { config } from "../src/config";
 
 // Regression coverage for a real bug: removing/disabling a device's webhook
 // used to silently flip EVERY one of its non-delivered punch records to
@@ -8,6 +7,12 @@ import { config } from "../src/config";
 // and failed. The fix: NA means "never had a shot and still can't" - once
 // a record has been attempted at least once, it keeps reporting on that
 // history (failed) regardless of the device's current webhook config.
+
+// maxAttempts is PlatformSettings.webhookMaxAttempts in production (a live,
+// super-admin-configurable DB value) - computeStatus/statusCondition take
+// it as a plain parameter now rather than reading a module-level config
+// singleton, so tests just pick a fixed value to exercise the boundary.
+const MAX_ATTEMPTS = 5;
 
 const activeWebhook = { webhookEnabled: true, webhookUrl: "https://example.com/hook" };
 const noWebhookUrl = { webhookEnabled: true, webhookUrl: null };
@@ -26,40 +31,46 @@ describe("hasActiveWebhook", () => {
 describe("computeStatus", () => {
   it("delivered wins regardless of anything else", () => {
     expect(
-      computeStatus({ webhookDelivered: true, webhookAttempts: 0, webhookHeld: true }, noWebhookAtAll)
+      computeStatus({ webhookDelivered: true, webhookAttempts: 0, webhookHeld: true }, noWebhookAtAll, MAX_ATTEMPTS)
     ).toBe("delivered");
   });
 
   it("held (never had a shot at ingestion, never retried) is NA even if a webhook exists now", () => {
     expect(
-      computeStatus({ webhookDelivered: false, webhookAttempts: 0, webhookHeld: true }, activeWebhook)
+      computeStatus({ webhookDelivered: false, webhookAttempts: 0, webhookHeld: true }, activeWebhook, MAX_ATTEMPTS)
     ).toBe("not_applicable");
   });
 
   it("no webhook + zero attempts is NA (nothing has happened, nothing to show)", () => {
     expect(
-      computeStatus({ webhookDelivered: false, webhookAttempts: 0, webhookHeld: false }, noWebhookAtAll)
+      computeStatus({ webhookDelivered: false, webhookAttempts: 0, webhookHeld: false }, noWebhookAtAll, MAX_ATTEMPTS)
     ).toBe("not_applicable");
   });
 
   it("THE BUG: a record that exhausted max attempts stays 'failed' after the webhook is removed, not NA", () => {
-    const record = { webhookDelivered: false, webhookAttempts: config.webhookMaxAttempts, webhookHeld: false };
-    expect(computeStatus(record, activeWebhook)).toBe("failed");
-    expect(computeStatus(record, noWebhookAtAll)).toBe("failed");
-    expect(computeStatus(record, disabledWebhook)).toBe("failed");
+    const record = { webhookDelivered: false, webhookAttempts: MAX_ATTEMPTS, webhookHeld: false };
+    expect(computeStatus(record, activeWebhook, MAX_ATTEMPTS)).toBe("failed");
+    expect(computeStatus(record, noWebhookAtAll, MAX_ATTEMPTS)).toBe("failed");
+    expect(computeStatus(record, disabledWebhook, MAX_ATTEMPTS)).toBe("failed");
   });
 
   it("a mid-backoff record (attempts > 0 but below max) is 'pending' with an active webhook, but 'failed' once the webhook is removed", () => {
     const record = { webhookDelivered: false, webhookAttempts: 2, webhookHeld: false };
-    expect(config.webhookMaxAttempts).toBeGreaterThan(2); // sanity: this is genuinely mid-backoff, not already-exhausted
-    expect(computeStatus(record, activeWebhook)).toBe("pending");
-    expect(computeStatus(record, noWebhookAtAll)).toBe("failed");
+    expect(MAX_ATTEMPTS).toBeGreaterThan(2); // sanity: this is genuinely mid-backoff, not already-exhausted
+    expect(computeStatus(record, activeWebhook, MAX_ATTEMPTS)).toBe("pending");
+    expect(computeStatus(record, noWebhookAtAll, MAX_ATTEMPTS)).toBe("failed");
   });
 
   it("attempts below max with an active webhook is pending", () => {
     expect(
-      computeStatus({ webhookDelivered: false, webhookAttempts: 1, webhookHeld: false }, activeWebhook)
+      computeStatus({ webhookDelivered: false, webhookAttempts: 1, webhookHeld: false }, activeWebhook, MAX_ATTEMPTS)
     ).toBe("pending");
+  });
+
+  it("maxAttempts is a live parameter, not a fixed constant - the same record flips status when it changes", () => {
+    const record = { webhookDelivered: false, webhookAttempts: 3, webhookHeld: false };
+    expect(computeStatus(record, activeWebhook, 5)).toBe("pending"); // below a higher max
+    expect(computeStatus(record, activeWebhook, 3)).toBe("failed"); // at a lower max
   });
 });
 
@@ -82,9 +93,9 @@ describe("statusCondition mirrors computeStatus for every combination (query fil
 
   for (const status of ["delivered", "pending", "failed", "not_applicable"] as const) {
     it(`every fixture matches statusCondition("${status}") exactly when computeStatus says "${status}"`, () => {
-      const where = statusCondition(status);
+      const where = statusCondition(status, MAX_ATTEMPTS);
       for (const { label, record, device } of fixtures) {
-        const expected = computeStatus(record, device) === status;
+        const expected = computeStatus(record, device, MAX_ATTEMPTS) === status;
         const actual = matchesPrismaWhere(where, record, device);
         expect(actual, `${label}: expected statusCondition("${status}") match = ${expected}`).toBe(expected);
       }

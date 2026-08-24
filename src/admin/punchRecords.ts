@@ -2,9 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/client";
-import { config } from "../config";
 import { requireSuperAdmin, resolveCompanyScope } from "../middleware/requireAdminAuth";
 import { paginationQuerySchema } from "../utils/pagination";
+import { getOrCreatePlatformSettings } from "../utils/retention";
 
 export const punchRecordsRouter = Router();
 
@@ -27,25 +27,31 @@ export function hasActiveWebhook(device: DeviceWebhookInfo): boolean {
 // removed/disabled before the worker's first attempt ever fired (attempts
 // still 0, no log to show). Anything that has actually been attempted at
 // least once keeps reporting on that history regardless of the device's
-// CURRENT webhook config: reaching webhookMaxAttempts is "failed" as
-// before, and - this is the fix - so is a still-mid-backoff record whose
-// device no longer has an active webhook to continue retrying against.
-// Without this, removing/disabling a device's webhook used to silently
-// flip every one of its pending AND failed records to NA, discarding the
+// CURRENT webhook config: reaching maxAttempts is "failed" as before, and
+// - this is the fix - so is a still-mid-backoff record whose device no
+// longer has an active webhook to continue retrying against. Without
+// this, removing/disabling a device's webhook used to silently flip
+// every one of its pending AND failed records to NA, discarding the
 // distinction between "never had a shot" and "tried and failed" - and left
 // "Retry now" clickable in every one of those states even though the
 // worker's own claim query (see claimBatch in worker.ts) requires an
 // active webhook and would just silently never pick the row back up.
+//
+// maxAttempts is PlatformSettings.webhookMaxAttempts (super-admin
+// configurable, see src/admin/settings.ts) - passed in rather than read
+// from a module-level config, since it's a live DB value now, not a
+// fixed-at-startup env var.
 export function computeStatus(
   record: { webhookDelivered: boolean; webhookAttempts: number; webhookHeld: boolean },
-  device: DeviceWebhookInfo
+  device: DeviceWebhookInfo,
+  maxAttempts: number
 ): WebhookStatus {
   if (record.webhookDelivered) return "delivered";
   if (record.webhookHeld) return "not_applicable";
   if (!hasActiveWebhook(device)) {
     return record.webhookAttempts > 0 ? "failed" : "not_applicable";
   }
-  if (record.webhookAttempts >= config.webhookMaxAttempts) return "failed";
+  if (record.webhookAttempts >= maxAttempts) return "failed";
   return "pending";
 }
 
@@ -56,11 +62,11 @@ function serializeRecord<
     webhookHeld: boolean;
     device: DeviceWebhookInfo & { id: string; serialNumber: string; label: string | null; companyId: string };
   }
->(record: T) {
+>(record: T, maxAttempts: number) {
   const { device, ...rest } = record;
   return {
     ...rest,
-    webhookStatus: computeStatus(record, device),
+    webhookStatus: computeStatus(record, device, maxAttempts),
     // Drives whether "Retry now" is clickable in the admin panel - retrying
     // is a genuine dead end (queued but never claimed by the worker) with
     // no active webhook on the device, regardless of what status is shown.
@@ -71,7 +77,7 @@ function serializeRecord<
 
 // Mirrors computeStatus's rule above at the query level, so filtering by
 // ?status= agrees with the badge computeStatus assigns the same record.
-export function statusCondition(status: WebhookStatus | undefined): Prisma.PunchRecordWhereInput {
+export function statusCondition(status: WebhookStatus | undefined, maxAttempts: number): Prisma.PunchRecordWhereInput {
   if (status === "delivered") return { webhookDelivered: true };
   const noActiveWebhook: Prisma.PunchRecordWhereInput = {
     device: { OR: [{ webhookEnabled: false }, { webhookUrl: null }] },
@@ -88,7 +94,7 @@ export function statusCondition(status: WebhookStatus | undefined): Prisma.Punch
       webhookDelivered: false,
       webhookHeld: false,
       OR: [
-        { webhookAttempts: { gte: config.webhookMaxAttempts } },
+        { webhookAttempts: { gte: maxAttempts } },
         { AND: [noActiveWebhook, { webhookAttempts: { gt: 0 } }] },
       ],
     };
@@ -97,7 +103,7 @@ export function statusCondition(status: WebhookStatus | undefined): Prisma.Punch
     return {
       webhookDelivered: false,
       webhookHeld: false,
-      AND: [hasActiveWebhookCond, { webhookAttempts: { lt: config.webhookMaxAttempts } }],
+      AND: [hasActiveWebhookCond, { webhookAttempts: { lt: maxAttempts } }],
     };
   }
   return {};
@@ -117,13 +123,13 @@ const listQuerySchema = z.object({
 // merged keys on one object) so that multiple independent `device: {...}`
 // filters - company scoping, status-based webhook-config checks - can
 // coexist without one silently clobbering another.
-async function buildScopedWhere(req: import("express").Request, extra: Prisma.PunchRecordWhereInput) {
+async function buildScopedWhere(req: import("express").Request, extra: Prisma.PunchRecordWhereInput, maxAttempts: number) {
   const parsed = listQuerySchema.safeParse(req.query);
   if (!parsed.success) return { ok: false, error: parsed.error } as const;
 
   const scope = resolveCompanyScope(req, parsed.data.companyId);
 
-  const conditions: Prisma.PunchRecordWhereInput[] = [extra, statusCondition(parsed.data.status)];
+  const conditions: Prisma.PunchRecordWhereInput[] = [extra, statusCondition(parsed.data.status, maxAttempts)];
   if (!scope.all) conditions.push({ device: { companyId: scope.companyId } });
   if (parsed.data.deviceId) conditions.push({ deviceId: parsed.data.deviceId });
   if (parsed.data.from || parsed.data.to) {
@@ -139,7 +145,8 @@ async function buildScopedWhere(req: import("express").Request, extra: Prisma.Pu
 }
 
 punchRecordsRouter.get("/", async (req, res) => {
-  const built = await buildScopedWhere(req, {});
+  const settings = await getOrCreatePlatformSettings(prisma);
+  const built = await buildScopedWhere(req, {}, settings.webhookMaxAttempts);
   if (!built.ok) {
     res.status(400).json({ error: "Invalid query", details: built.error.flatten() });
     return;
@@ -157,17 +164,22 @@ punchRecordsRouter.get("/", async (req, res) => {
     prisma.punchRecord.count({ where }),
   ]);
 
-  res.json({ records: records.map(serializeRecord), total, page, pageSize });
+  res.json({ records: records.map((r) => serializeRecord(r, settings.webhookMaxAttempts)), total, page, pageSize });
 });
 
 // Dedicated failed-webhooks view: retries exhausted OR most recent attempt errored.
 // (Held/NA records naturally never match this - they never accumulate
 // attempts or errors while held back from delivery.)
 punchRecordsRouter.get("/failed", async (req, res) => {
-  const built = await buildScopedWhere(req, {
-    webhookDelivered: false,
-    OR: [{ webhookAttempts: { gte: config.webhookMaxAttempts } }, { lastWebhookError: { not: null } }],
-  });
+  const settings = await getOrCreatePlatformSettings(prisma);
+  const built = await buildScopedWhere(
+    req,
+    {
+      webhookDelivered: false,
+      OR: [{ webhookAttempts: { gte: settings.webhookMaxAttempts } }, { lastWebhookError: { not: null } }],
+    },
+    settings.webhookMaxAttempts
+  );
   if (!built.ok) {
     res.status(400).json({ error: "Invalid query", details: built.error.flatten() });
     return;
@@ -185,7 +197,7 @@ punchRecordsRouter.get("/failed", async (req, res) => {
     prisma.punchRecord.count({ where }),
   ]);
 
-  res.json({ records: records.map(serializeRecord), total, page, pageSize });
+  res.json({ records: records.map((r) => serializeRecord(r, settings.webhookMaxAttempts)), total, page, pageSize });
 });
 
 async function assertVisible(req: import("express").Request, punchRecordId: string) {
@@ -219,9 +231,9 @@ punchRecordsRouter.get("/:id/deliveries", async (req, res) => {
   const { page, pageSize } = parsedQuery.data;
 
   // Repeated manual "Retry now" clicks can pile up attempts well past
-  // WEBHOOK_MAX_ATTEMPTS, so this can't be assumed bounded - paginate it.
+  // webhookMaxAttempts, so this can't be assumed bounded - paginate it.
   const where = { punchRecordId: record.id };
-  const [deliveries, total] = await Promise.all([
+  const [deliveries, total, settings] = await Promise.all([
     prisma.webhookDelivery.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -229,9 +241,10 @@ punchRecordsRouter.get("/:id/deliveries", async (req, res) => {
       take: pageSize,
     }),
     prisma.webhookDelivery.count({ where }),
+    getOrCreatePlatformSettings(prisma),
   ]);
 
-  res.json({ punchRecord: serializeRecord(record), deliveries, total, page, pageSize });
+  res.json({ punchRecord: serializeRecord(record, settings.webhookMaxAttempts), deliveries, total, page, pageSize });
 });
 
 // Queues a punch record for the worker's next poll: nextAttemptAt = now(),

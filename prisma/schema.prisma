@@ -295,20 +295,30 @@ model RawRequestLog {
 
 // Platform-wide (not per-company) configuration - always exactly one row,
 // at the fixed id below, upserted rather than created fresh per request.
-// Not a generic key-value table on purpose: this app has exactly one
-// global setting so far, and a dedicated typed column matches every other
-// model in this schema rather than introducing a new, differently-shaped
-// pattern for a single field.
+// Not a generic key-value table on purpose: a dedicated typed column per
+// setting matches every other model in this schema, and there are few
+// enough of these that a key-value table would just be indirection.
 model PlatformSettings {
   id String @id @default("singleton")
 
   // Rows older than this many days are permanently deleted by the
-  // worker's retention sweep (src/worker.ts) - punch/attendance records
-  // (and their cascaded webhook delivery history), raw request/device
-  // logs, unregistered-device ping logs, and device command history.
-  // Devices, companies, admin users, and pending (unclaimed) device
-  // summaries are never touched by retention - only historical/log data.
+  // worker's retention sweep (src/retentionSweep.ts) - punch/attendance
+  // records (and their cascaded webhook delivery history), raw request/
+  // device logs, unregistered-device ping logs, and device command
+  // history. Devices, companies, admin users, and pending (unclaimed)
+  // device summaries are never touched by retention - only historical/
+  // log data.
   dataRetentionDays Int @default(30)
+
+  // Retries before a punch's webhook delivery is considered exhausted
+  // ("failed" in the admin panel) - see computeBackoffMs in worker.ts for
+  // the backoff schedule between attempts. Formerly the WEBHOOK_MAX_ATTEMPTS
+  // env var; moved here so it's changeable without a restart.
+  webhookMaxAttempts Int @default(5)
+  // Per-attempt timeout for an outbound webhook HTTP call, in
+  // milliseconds - see dispatchWebhook in src/webhooks/dispatcher.ts.
+  // Formerly the WEBHOOK_TIMEOUT_MS env var, same reason as above.
+  webhookTimeoutMs Int @default(8000)
 
   updatedAt DateTime @updatedAt
 

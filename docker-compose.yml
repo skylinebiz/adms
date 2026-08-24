@@ -80,8 +80,6 @@ services:
       # container had nothing to satisfy that check and crash-looped on
       # every boot.
       JWT_SECRET: ${JWT_SECRET}
-      WEBHOOK_MAX_ATTEMPTS: ${WEBHOOK_MAX_ATTEMPTS:-5}
-      WEBHOOK_TIMEOUT_MS: ${WEBHOOK_TIMEOUT_MS:-8000}
       WORKER_POLL_INTERVAL_MS: ${WORKER_POLL_INTERVAL_MS:-3000}
       WORKER_BATCH_SIZE: ${WORKER_BATCH_SIZE:-50}
 

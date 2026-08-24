@@ -7,6 +7,7 @@ import { config } from "./config";
 import { appLogger as logger } from "./logger";
 import { dispatchPunchWebhook } from "./webhooks/dispatcher";
 import { runRetentionSweep } from "./retentionSweep";
+import { getOrCreatePlatformSettings } from "./utils/retention";
 
 // Backoff schedule indexed by attempt number (1-based): 30s, 2m, 10m, 1h, 6h.
 const BACKOFF_SCHEDULE_MS = [30_000, 120_000, 600_000, 3_600_000, 21_600_000];
@@ -58,7 +59,7 @@ async function claimBatch(batchSize: number): Promise<string[]> {
   });
 }
 
-async function processPunchRecord(id: string) {
+async function processPunchRecord(id: string, webhookMaxAttempts: number, webhookTimeoutMs: number) {
   const punch = await prisma.punchRecord.findUnique({
     where: { id },
     include: { device: { include: { company: { select: { name: true } } } } },
@@ -69,7 +70,7 @@ async function processPunchRecord(id: string) {
     punch,
     punch.device,
     punch.device.company.name,
-    config.webhookTimeoutMs
+    webhookTimeoutMs
   );
 
   const attemptNumber = punch.webhookAttempts + 1;
@@ -101,7 +102,7 @@ async function processPunchRecord(id: string) {
             webhookAttempts: attemptNumber,
             lastWebhookError: result.error,
             nextAttemptAt:
-              attemptNumber >= config.webhookMaxAttempts
+              attemptNumber >= webhookMaxAttempts
                 ? PARKED_NEXT_ATTEMPT
                 : new Date(Date.now() + computeBackoffMs(attemptNumber)),
           },
@@ -113,7 +114,7 @@ async function processPunchRecord(id: string) {
   } else {
     logger.warn(
       { punchId: punch.id, attempt: attemptNumber, error: result.error, statusCode: result.statusCode },
-      attemptNumber >= config.webhookMaxAttempts ? "webhook failed - retries exhausted" : "webhook failed - will retry"
+      attemptNumber >= webhookMaxAttempts ? "webhook failed - retries exhausted" : "webhook failed - will retry"
     );
   }
 }
@@ -139,6 +140,11 @@ let stopping = false;
 
 async function tick() {
   try {
+    // Fetched once per tick, not once per record - webhookMaxAttempts/
+    // webhookTimeoutMs are now a live DB value (see PlatformSettings)
+    // rather than a fixed-at-startup env var, but there's no need to
+    // re-read it for every record in a batch of up to workerBatchSize.
+    const settings = await getOrCreatePlatformSettings(prisma);
     const ids = await claimBatch(config.workerBatchSize);
     if (ids.length > 0) {
       logger.info({ count: ids.length }, "claimed punch records for webhook delivery");
@@ -146,7 +152,7 @@ async function tick() {
     for (const id of ids) {
       if (stopping) break;
       try {
-        await processPunchRecord(id);
+        await processPunchRecord(id, settings.webhookMaxAttempts, settings.webhookTimeoutMs);
       } catch (err) {
         logger.error({ err, punchId: id }, "unexpected error processing punch record");
       }
@@ -163,11 +169,15 @@ async function tick() {
 }
 
 async function main() {
+  // maxAttempts/timeout deliberately left out of this startup banner -
+  // they're a live DB value now (PlatformSettings), not fixed for the
+  // process's lifetime the way the env-var-backed fields below are, so a
+  // value logged once at boot could go stale the moment an admin changes
+  // it from the Settings page without a restart.
   logger.info(
     {
       pollIntervalMs: config.workerPollIntervalMs,
       batchSize: config.workerBatchSize,
-      maxAttempts: config.webhookMaxAttempts,
     },
     "webhook worker starting"
   );

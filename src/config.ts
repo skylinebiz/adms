@@ -32,8 +32,10 @@ export const config = {
   // milliseconds means it's missed several cycles in a row, not just one
   // delayed request. See computeDeviceStatus in src/utils/deviceStatus.ts.
   deviceOfflineThresholdMs: Number(process.env.DEVICE_OFFLINE_THRESHOLD_MS ?? 5 * 60 * 1000),
-  webhookMaxAttempts: Number(process.env.WEBHOOK_MAX_ATTEMPTS ?? 5),
-  webhookTimeoutMs: Number(process.env.WEBHOOK_TIMEOUT_MS ?? 8000),
+  // webhookMaxAttempts/webhookTimeoutMs used to live here as env vars -
+  // moved to PlatformSettings (see prisma/schema.prisma), changeable from
+  // the admin panel's Settings page without a restart. Read via
+  // getOrCreatePlatformSettings in src/utils/retention.ts.
   workerPollIntervalMs: Number(process.env.WORKER_POLL_INTERVAL_MS ?? 3000),
   workerBatchSize: Number(process.env.WORKER_BATCH_SIZE ?? 50),
 };

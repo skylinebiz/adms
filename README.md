@@ -492,10 +492,12 @@ device's configured IANA zone name (or `null`), so a receiver can localize
 `punch_time_utc` back to the device's own time without hardcoding it.
 
 Only a 2xx response marks it delivered. Failures back off (30s, 2m, 10m, 1h,
-6h) up to `WEBHOOK_MAX_ATTEMPTS` (default 5), after which the record stays
-visible under **Failed Webhooks** in the admin panel for manual or bulk
-retry ("Retry now" resets attempts/backoff so the worker picks it up on its
-next poll).
+6h) up to the configured max attempts (**admin panel → Settings → Webhook
+delivery**, super admin only, platform-wide — default **5**, along with
+the per-attempt timeout, default **8000 ms**), after which the record
+stays visible under **Failed Webhooks** in the admin panel for manual or
+bulk retry — "Retry now" queues exactly one more attempt on top of the
+existing count (it does not reset attempts back to zero).
 
 ### "NA" status and configuring a webhook after punches already exist
 
@@ -735,13 +737,16 @@ See [`.env.example`](.env.example) for the full list. Notable ones:
 | `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` | One-time seed for the first super-admin                                                                                                                                                       |
 | `ADMS_MAX_BODY_SIZE`                                 | Max device-facing request body size (default `10mb`) — see [ADMS response codes](#adms-response-codes-and-retry-behavior)                                                                     |
 | `DEVICE_OFFLINE_THRESHOLD_MS`                        | How long (ms) after last contact a device is still shown as ONLINE (default `300000` = 5 min) — see [Device online/offline status](#device-onlineoffline-status)                              |
-| `WEBHOOK_MAX_ATTEMPTS`                               | Retries before a punch is marked "failed" in the admin panel                                                                                                                                  |
 | `WORKER_POLL_INTERVAL_MS` / `WORKER_BATCH_SIZE`      | How often / how many rows the worker claims per tick                                                                                                                                          |
 
-Data retention (default 30 days) is **not** an env var — it's a
-platform-wide setting stored in the database, changed from the admin
-panel (**Settings**, super admin only), not `.env`. See [Data
-retention](#data-retention) above.
+Three settings are **not** env vars, even though they used to be (or you
+might expect them to be) — they're platform-wide values stored in the
+database, changed from the admin panel (**Settings**, super admin only),
+not `.env`, and take effect immediately with no restart:
+
+- **Data retention** (default 30 days) — see [Data retention](#data-retention) above.
+- **Webhook max attempts** (default 5) and **webhook timeout** (default
+  8000 ms) — see [Webhook delivery](#webhook-delivery) above.
 
 ### adms.adrk.in's configuration
 
@@ -751,9 +756,10 @@ without needing to ask):
 
 - **Data retention: 10 days**, not the 30-day default — see [Data
   retention](#data-retention) above.
-- Everything else above runs at its documented default:
+- **Webhook max attempts and timeout run at their defaults** (5 attempts,
+  8000 ms) — see [Webhook delivery](#webhook-delivery) above.
+- Every env var above runs at its documented default:
   `ADMS_MAX_BODY_SIZE=10mb`, `DEVICE_OFFLINE_THRESHOLD_MS=300000` (5 min),
-  `WEBHOOK_MAX_ATTEMPTS=5`, `WEBHOOK_TIMEOUT_MS=8000`,
   `WORKER_POLL_INTERVAL_MS=3000`, `WORKER_BATCH_SIZE=50`.
 
 ## Tests

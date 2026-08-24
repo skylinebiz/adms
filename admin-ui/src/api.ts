@@ -143,6 +143,8 @@ export interface RawRequestLog {
 export interface PlatformSettings {
   id: string;
   dataRetentionDays: number;
+  webhookMaxAttempts: number;
+  webhookTimeoutMs: number;
   updatedAt: string;
 }
 
@@ -352,6 +354,7 @@ export const api = {
     post<{ ok: true; deleted: number }>("/raw-requests/delete-bulk", { ids }),
 
   getSettings: () => get<{ settings: PlatformSettings }>("/settings"),
-  updateSettings: (data: { dataRetentionDays: number }) =>
-    patch<{ settings: PlatformSettings }>("/settings", data),
+  updateSettings: (
+    data: Partial<{ dataRetentionDays: number; webhookMaxAttempts: number; webhookTimeoutMs: number }>
+  ) => patch<{ settings: PlatformSettings }>("/settings", data),
 };

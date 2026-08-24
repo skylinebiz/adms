@@ -3,7 +3,6 @@ import crypto from "node:crypto";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/client";
-import { config } from "../config";
 import { appLogger as logger } from "../logger";
 import { requireSuperAdmin, resolveCompanyScope } from "../middleware/requireAdminAuth";
 import { dispatchWebhook, renderPunchWebhookBody } from "../webhooks/dispatcher";
@@ -12,6 +11,7 @@ import { OPTIONS_LIMIT, paginationQuerySchema } from "../utils/pagination";
 import { isValidTimeZone } from "../adms/timezone";
 import { computeDeviceStatus } from "../utils/deviceStatus";
 import { isSafeWebhookUrl } from "../utils/ssrfGuard";
+import { getOrCreatePlatformSettings } from "../utils/retention";
 
 export const devicesRouter = Router();
 
@@ -500,7 +500,8 @@ devicesRouter.post("/:id/test-webhook", async (req, res) => {
 
   const body = renderPunchWebhookBody(bodyTemplate, vars);
   const renderedHeaders = renderHeaders(headers, vars);
-  const result = await dispatchWebhook(url, secret, body, config.webhookTimeoutMs, renderedHeaders);
+  const settings = await getOrCreatePlatformSettings(prisma);
+  const result = await dispatchWebhook(url, secret, body, settings.webhookTimeoutMs, renderedHeaders);
 
   res.json({ sentBody: body, sentHeaders: renderedHeaders, result });
 });

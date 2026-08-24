@@ -12,6 +12,28 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.14.0] - 2026-08-24
+
+### Added
+
+- **Webhook max attempts and per-attempt timeout moved into the Settings
+  page**, alongside data retention - `WEBHOOK_MAX_ATTEMPTS`/
+  `WEBHOOK_TIMEOUT_MS` are no longer env vars (removed from `.env.example`
+  and `docker-compose.yml`). Both now live on `PlatformSettings`
+  (`webhookMaxAttempts` default 5, `webhookTimeoutMs` default 8000ms),
+  editable from a new "Webhook delivery" card on the same super-admin-only
+  Settings page, saved independently of data retention. Takes effect
+  immediately, no restart - `computeStatus`/`statusCondition` (the
+  pending/failed classification) and the worker's dispatch/backoff logic
+  all now take these as live parameters instead of reading a
+  fixed-at-startup config value. Verified live: flipping max attempts from
+  5 to 7 immediately changed an existing 5-attempt record's badge from
+  "failed" to "pending", and the worker's very next tick logged "will
+  retry" instead of "retries exhausted" for it.
+- README: updated to match (Environment Variables table, the new
+  "adms.adrk.in's configuration" bullets, and the Webhook delivery
+  section).
+
 ## [2.13.0] - 2026-08-24
 
 ### Added
