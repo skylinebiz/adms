@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import DeviceDrawer from "../components/DeviceDrawer";
 import WebhookDrawer from "../components/WebhookDrawer";
 import DeviceCommandsDrawer from "../components/DeviceCommandsDrawer";
+import ConnectDeviceCard from "../components/ConnectDeviceCard";
 import Pagination from "../components/Pagination";
 
 const PAGE_SIZE = 25;
@@ -63,19 +64,16 @@ export default function Devices() {
       </div>
       {error && <div className="error-banner">{error}</div>}
 
-      {user?.role === "COMPANY_ADMIN" && companies[0] && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <h3 style={{ marginTop: 0 }}>Connect a device</h3>
-          <p className="muted">
-            On the device: <strong>Menu → COMM → Cloud Server Setting</strong>. Set the server address to:
-          </p>
-          <code className="mono">{`${window.location.origin}/${companies[0].slug}/<any-secret-you-choose>`}</code>
-          <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
-            Pick any secret string - it becomes that device's secret automatically once you register it, or gets
+      <ConnectDeviceCard
+        companies={companies}
+        isSuperAdmin={user?.role === "SUPER_ADMIN"}
+        trailingNote={
+          <>
+            Pick any secret string — it becomes that device's secret automatically once you register it, or gets
             captured the moment it first pings and you can claim it from <strong>Unregistered Devices</strong>.
-          </p>
-        </div>
-      )}
+          </>
+        }
+      />
 
       <div className="card">
         {loading ? (

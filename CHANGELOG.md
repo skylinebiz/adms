@@ -12,6 +12,22 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.14.1] - 2026-08-24
+
+### Added
+
+- The "Connect a device" card (Devices, Unregistered Devices) now shows
+  the full Cloud Server Setting instructions in the UI, not just a single
+  URL line: "Enable Domain Name: ON", and the 3-option server-address
+  fallback order (`https://` → `http://` → no scheme) with real URLs
+  built from the viewer's own host and the selected company's slug -
+  matching what's documented in the README.
+- **The card is no longer company_admin-only** - super_admin now sees it
+  too, with a company picker (only shown when there's more than one
+  company) since super_admin isn't tied to a single company/slug the way
+  company_admin is. New shared `ConnectDeviceCard` component, extracted
+  out of the two pages that each had their own copy.
+
 ## [2.14.0] - 2026-08-24
 
 ### Added

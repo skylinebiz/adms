@@ -3,6 +3,7 @@ import { api, ApiError, CompanyOption } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useSelection } from "../hooks/useSelection";
 import Pagination from "../components/Pagination";
+import ConnectDeviceCard from "../components/ConnectDeviceCard";
 import { DEFAULT_TIMEZONE, TIMEZONE_OPTIONS } from "../utils/timezoneOptions";
 
 const PAGE_SIZE = 25;
@@ -111,19 +112,11 @@ export default function UnregisteredDevices() {
         for accurate punch times and to tell the device itself its clock/timezone), or delete it if it's just noise.
       </p>
 
-      {user?.role === "COMPANY_ADMIN" && companies[0] && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <h3 style={{ marginTop: 0 }}>Connect a device</h3>
-          <p className="muted">
-            On the device: <strong>Menu → COMM → Cloud Server Setting</strong>. Set the server address to:
-          </p>
-          <code className="mono">{`${window.location.origin}/${companies[0].slug}/<any-secret-you-choose>`}</code>
-          <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
-            Pick any secret string - it becomes that device's secret automatically once you register it, or the
-            moment it first pings it shows up right here, ready to claim.
-          </p>
-        </div>
-      )}
+      <ConnectDeviceCard
+        companies={companies}
+        isSuperAdmin={isSuperAdmin}
+        trailingNote="Pick any secret string — it becomes that device's secret automatically once you register it, or the moment it first pings it shows up right here, ready to claim."
+      />
 
       {error && <div className="error-banner">{error}</div>}
 
