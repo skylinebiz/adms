@@ -105,16 +105,41 @@ Works the same on ZKTeco and eSSL devices — on the device: **Menu → COMM →
 Cloud Server Setting** (some eSSL menus label it differently, but it's the
 same setting).
 
-- **Server address**: `https://` if your device supports it (see
-  [Security](#security-try-https-fall-back-to-a-trusted-network) above),
-  otherwise `http://` —
+- **Enable Domain Name**: **ON** — required for a hostname-based address
+  like the examples below. With this on, most firmware folds the port
+  directly into the Server address field and drops the separate "Server
+  port" field from the menu entirely — if you need a non-default port
+  (e.g. self-hosting on the default `8080` with no reverse proxy in
+  front), include it directly in the Server address value instead:
+  `your-server.example.com:8080/your-company/your-secret`.
+- **Server address**:
   `<protocol>://<host>:<port>/<your-company-slug>/<any-secret-you-choose>`
   (see [Company + device URLs](#company--device-urls) below) — the company
-  slug is required; there's no bare `<host>:<port>` fallback.
-- **Server port**: `8080` (or whatever `PORT` is set to) — only relevant if
-  your firmware has a separate port field instead of folding it into the
-  address.
-- **Enable Domain Name**: off (unless you're using a hostname)
+  slug is required; there's no bare `<host>:<port>` fallback. Try these in
+  order, most secure first, falling back only as far as your firmware
+  actually forces you to:
+
+  1. `https://your-server.example.com/your-company/your-secret` — real
+     TLS, no caveats. Use this if your device's Cloud Server Setting
+     accepts it at all (see
+     [Security](#security-try-https-fall-back-to-a-trusted-network) above).
+  2. `http://your-server.example.com/your-company/your-secret` — plain
+     HTTP. Only over a trusted network (private LAN or VPN) — never
+     expose this to the open internet, see
+     [Security](#security-try-https-fall-back-to-a-trusted-network) above.
+  3. `your-server.example.com/your-company/your-secret` — no scheme at
+     all. Some older ZKTeco/eSSL firmware's Cloud Server Setting field
+     rejects (or silently drops) a `http://`/`https://` prefix — if the
+     field won't accept option 2 as typed, try the bare host/path
+     instead. Firmware that accepts this still only ever speaks plain
+     HTTP underneath, so the same trusted-network-only caveat as #2 applies.
+
+  The device itself won't tell you which of these worked — a wrong or
+  unreachable address just fails silently, with no error shown on the
+  device. Try one, wait a few seconds to a minute, and check this
+  platform's **Unregistered Devices** page: once its serial number shows
+  up there, that address works and you can stop. If nothing appears, move
+  to the next option in the list.
 
 The device itself appends `/iclock/cdata`, `/iclock/getrequest`, etc. after
 whatever base address you gave it (eSSL firmware appends `.aspx` to those
