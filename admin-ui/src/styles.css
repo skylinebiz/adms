@@ -154,7 +154,14 @@ a:hover { text-decoration: underline; }
 .sidebar .user-info div:first-child { color: #dfe3ea; font-weight: 500; word-break: break-word; }
 .sidebar .app-version { padding: 0 20px 4px; font-size: 11px; color: #565d6b; }
 
-.main { flex: 1; min-width: 0; padding: 28px 32px; max-width: 1200px; }
+/* No max-width here on purpose - .main already only ever gets the
+   viewport's width minus the fixed-width sidebar (flex: 1 inside
+   .body-row's flex row), so it already can't run unbounded on any real
+   screen. A narrower reading width for prose/forms is each individual
+   card's own concern (see e.g. ChangePassword.tsx's inline maxWidth) -
+   content that actually benefits from more room, like a wide table,
+   isn't artificially starved of it by a blanket cap here. */
+.main { flex: 1; min-width: 0; padding: 28px 32px; }
 .main h2 { margin-top: 0; }
 
 @media (max-width: 900px) {
@@ -231,13 +238,18 @@ tr:hover td { background: var(--surface-2); }
 .btn-sm { padding: 5px 10px; font-size: 12px; min-height: 28px; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* A table row's action buttons. table-layout:auto can squeeze this cell
-   down to barely wider than its narrowest button on small screens - with
-   no min-width, every button then wraps onto its own line (flex-wrap
-   still applies, but there's no room for two side by side), stretching
-   the whole row absurdly tall. min-width guarantees at least two buttons
-   fit per line regardless of how tight the column gets. */
-.actions-cell { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-width: 200px; }
+/* A table row's action buttons. Every other td in this table already
+   stays on one line (see `white-space: nowrap` above) and lets
+   .table-wrap's horizontal scroll handle a table wider than its
+   container - this cell used to be the one exception, wrapping its
+   buttons vertically instead, which on a row with several actions
+   (Edit/Webhook/Commands/Punches/Raw Data/Delete) stretched rows
+   absurdly tall well before it actually ran out of room. flex-wrap:
+   nowrap brings it in line with how every other column already behaves:
+   the buttons take their natural width and the table scrolls
+   horizontally if the viewport is too narrow for all of it, at any
+   screen size, with no breakpoint or magic min-width needed. */
+.actions-cell { display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; }
 
 /* ---------- Forms ---------- */
 

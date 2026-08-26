@@ -12,6 +12,28 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.14.2] - 2026-08-26
+
+### Fixed
+
+- **Table action buttons wrapped onto multiple lines**, stretching rows
+  absurdly tall, well before the row actually ran out of horizontal room -
+  `.actions-cell` was the one table cell fighting the "every cell stays on
+  one line, `.table-wrap` scrolls horizontally instead" pattern every
+  other column already followed (`white-space: nowrap`). Fixed by making
+  it consistent with the rest of the table (`flex-wrap: nowrap`, no
+  min-width) instead of patching the old mobile-only `min-width: 200px`
+  band-aid with a bigger magic number - buttons now take their natural
+  width and the table scrolls horizontally if a screen is too narrow for
+  all of it, at any size, with no new breakpoint.
+- **`.main` had a hardcoded `max-width: 1200px`**, wasting real width on
+  screens above that regardless of content - removed. `.main` is already
+  `flex: 1` next to a fixed-width sidebar, so it was already bounded by
+  the viewport on every screen; individual cards that want a narrower
+  reading width (forms, prose) already set their own, so nothing that
+  benefited from the cap regresses, and content that wants more room
+  (tables) isn't starved of it.
+
 ## [2.14.1] - 2026-08-24
 
 ### Added
