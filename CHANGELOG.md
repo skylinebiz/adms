@@ -12,6 +12,23 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.15.0] - 2026-09-07
+
+### Added
+
+- **Configurable date/time display format.** Every timestamp in the admin
+  panel now renders as `YYYY-MM-DD HH:MM:SS` (24-hour) by default, instead
+  of each page calling `toLocaleString()` independently and rendering
+  whatever shape the viewer's browser locale happened to produce. A new
+  "Date & time display" section on the Settings page lets an admin switch
+  the date part (`YYYY-MM-DD`, `DD-MM-YYYY`, `DD/MM/YYYY`, `MM/DD/YYYY`)
+  and time part (24-hour, 12-hour) independently, with a live preview.
+  UI-only: the preference lives in that browser's `localStorage`, never
+  touches the database or any API - punch records keep their existing
+  UTC-vs-viewer's-local-timezone rules (`formatPunchTime`/
+  `formatAccurateTime`), only the display shape changed. New
+  `admin-ui/src/utils/dateFormat.ts`.
+
 ## [2.14.2] - 2026-08-26
 
 ### Fixed
