@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, ApiError, DeviceCommandLog } from "../api";
+import { formatDateTime } from "../utils/dateFormat";
 
 interface Props {
   deviceId: string;
@@ -97,8 +98,8 @@ export default function DeviceCommandsDrawer({ deviceId, serialNumber, onClose }
                     <span className={`badge badge-${c.status.toLowerCase()}`}>{c.status}</span>
                   </div>
                   <div className="muted" style={{ marginTop: 4 }}>
-                    Queued {new Date(c.createdAt).toLocaleString()}
-                    {c.ackedAt ? ` · ACKed ${new Date(c.ackedAt).toLocaleString()}` : ""}
+                    Queued {formatDateTime(c.createdAt)}
+                    {c.ackedAt ? ` · ACKed ${formatDateTime(c.ackedAt)}` : ""}
                   </div>
                   {c.response && (
                     <div

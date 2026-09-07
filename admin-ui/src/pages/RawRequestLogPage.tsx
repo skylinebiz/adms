@@ -4,6 +4,7 @@ import { api, ApiError, RawRequestLog } from "../api";
 import { useSelection } from "../hooks/useSelection";
 import Pagination from "../components/Pagination";
 import RawEntryDrawer from "../components/RawEntryDrawer";
+import { formatDateTime } from "../utils/dateFormat";
 
 const PAGE_SIZE = 25;
 
@@ -130,7 +131,7 @@ export default function RawRequestLogPage() {
                     <td>
                       <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} />
                     </td>
-                    <td>{new Date(r.createdAt).toLocaleString()}</td>
+                    <td>{formatDateTime(r.createdAt)}</td>
                     <td>
                       {r.serialNumber ? (
                         <code className="mono">{r.serialNumber}</code>

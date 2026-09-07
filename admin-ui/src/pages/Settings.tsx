@@ -1,5 +1,16 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, ApiError, PlatformSettings } from "../api";
+import {
+  DATE_FORMAT_OPTIONS,
+  DateFormatId,
+  formatDateTime,
+  getDateFormatPreference,
+  getTimeFormatPreference,
+  setDateFormatPreference,
+  setTimeFormatPreference,
+  TIME_FORMAT_OPTIONS,
+  TimeFormatId,
+} from "../utils/dateFormat";
 
 const MIN_DAYS = 1;
 const MAX_DAYS = 3650;
@@ -23,6 +34,22 @@ export default function Settings() {
   const [webhookError, setWebhookError] = useState<string | null>(null);
   const [webhookSuccess, setWebhookSuccess] = useState(false);
   const [webhookSaving, setWebhookSaving] = useState(false);
+
+  // UI-only display preference - stored in this browser's localStorage
+  // (see utils/dateFormat.ts), never sent to the server. Applies to every
+  // date/time shown across the admin panel, not just this page.
+  const [dateFormat, setDateFormatState] = useState<DateFormatId>(getDateFormatPreference());
+  const [timeFormat, setTimeFormatState] = useState<TimeFormatId>(getTimeFormatPreference());
+
+  function onChangeDateFormat(id: DateFormatId) {
+    setDateFormatPreference(id);
+    setDateFormatState(id);
+  }
+
+  function onChangeTimeFormat(id: TimeFormatId) {
+    setTimeFormatPreference(id);
+    setTimeFormatState(id);
+  }
 
   useEffect(() => {
     api
@@ -170,9 +197,38 @@ export default function Settings() {
             </form>
           </div>
 
-          {settings && (
-            <p className="muted">Last changed: {new Date(settings.updatedAt).toLocaleString()}</p>
-          )}
+          <div className="card" style={{ maxWidth: 520, marginBottom: 16 }}>
+            <h3 style={{ marginTop: 0 }}>Date &amp; time display</h3>
+            <p className="muted">
+              How dates and times are shown across the admin panel. This is a display-only preference saved in
+              this browser — it doesn't change any stored data, and isn't shared with other admins or devices.
+            </p>
+            <div className="form-row">
+              <div className="field">
+                <label>Date format</label>
+                <select value={dateFormat} onChange={(e) => onChangeDateFormat(e.target.value as DateFormatId)}>
+                  {DATE_FORMAT_OPTIONS.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>Time format</label>
+                <select value={timeFormat} onChange={(e) => onChangeTimeFormat(e.target.value as TimeFormatId)}>
+                  {TIME_FORMAT_OPTIONS.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <p className="muted">Preview: {formatDateTime(new Date())}</p>
+          </div>
+
+          {settings && <p className="muted">Last changed: {formatDateTime(settings.updatedAt)}</p>}
         </>
       )}
     </div>

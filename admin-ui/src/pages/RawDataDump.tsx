@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { useSelection } from "../hooks/useSelection";
 import Pagination from "../components/Pagination";
 import RawEntryDrawer from "../components/RawEntryDrawer";
+import { formatDateTime } from "../utils/dateFormat";
 
 const PAGE_SIZE = 25;
 
@@ -149,7 +150,7 @@ export default function RawDataDump() {
                         <input type="checkbox" checked={selected.has(l.id)} onChange={() => toggle(l.id)} />
                       </td>
                     )}
-                    <td>{new Date(l.createdAt).toLocaleString()}</td>
+                    <td>{formatDateTime(l.createdAt)}</td>
                     <td>{l.table ? <span className="badge badge-pending">{l.table}</span> : <span className="muted">—</span>}</td>
                     <td>
                       <code className="mono">{l.endpoint}</code>

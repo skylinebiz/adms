@@ -5,6 +5,7 @@ import { useSelection } from "../hooks/useSelection";
 import Pagination from "../components/Pagination";
 import ConnectDeviceCard from "../components/ConnectDeviceCard";
 import { DEFAULT_TIMEZONE, TIMEZONE_OPTIONS } from "../utils/timezoneOptions";
+import { formatDateTime } from "../utils/dateFormat";
 
 const PAGE_SIZE = 25;
 
@@ -191,7 +192,7 @@ export default function UnregisteredDevices() {
                         </td>
                       )}
                       <td>{p.pingCount}</td>
-                      <td>{new Date(p.lastSeenAt).toLocaleString()}</td>
+                      <td>{formatDateTime(p.lastSeenAt)}</td>
                       {isSuperAdmin && (
                         <td style={{ minWidth: 180 }}>
                           <select

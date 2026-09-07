@@ -3,6 +3,7 @@ import { api, ApiError, Company } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { slugify } from "../utils/slug";
 import Pagination from "../components/Pagination";
+import { formatDateTime } from "../utils/dateFormat";
 
 const PAGE_SIZE = 25;
 
@@ -129,7 +130,7 @@ export default function Companies() {
                       </td>
                       <td>{c._count?.devices ?? "-"}</td>
                       <td>{c._count?.adminUsers ?? "-"}</td>
-                      <td>{new Date(c.createdAt).toLocaleString()}</td>
+                      <td>{formatDateTime(c.createdAt)}</td>
                       {user?.role === "SUPER_ADMIN" && (
                         <td>
                           <button className="btn btn-sm btn-danger" onClick={() => onDelete(c.id)}>

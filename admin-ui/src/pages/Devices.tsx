@@ -7,6 +7,7 @@ import WebhookDrawer from "../components/WebhookDrawer";
 import DeviceCommandsDrawer from "../components/DeviceCommandsDrawer";
 import ConnectDeviceCard from "../components/ConnectDeviceCard";
 import Pagination from "../components/Pagination";
+import { formatDateTime } from "../utils/dateFormat";
 
 const PAGE_SIZE = 25;
 
@@ -105,7 +106,7 @@ export default function Devices() {
                       <span className={`badge badge-${d.status.toLowerCase()}`}>{d.status}</span>
                     </td>
                     <td>
-                      {d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : <span className="muted">never</span>}
+                      {d.lastSeenAt ? formatDateTime(d.lastSeenAt) : <span className="muted">never</span>}
                     </td>
                     <td>
                       {/* Configured/enabled indicator only - never the URL itself, even masked,

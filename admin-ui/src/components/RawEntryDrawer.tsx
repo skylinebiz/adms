@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { formatDateTime } from "../utils/dateFormat";
 
 interface RawEntry {
   createdAt: string;
@@ -52,7 +53,7 @@ export default function RawEntryDrawer({ entry, onClose }: { entry: RawEntry; on
             </div>
           )}
           <div className="muted" style={{ marginTop: 4 }}>
-            {new Date(entry.createdAt).toLocaleString()}
+            {formatDateTime(entry.createdAt)}
           </div>
         </div>
 

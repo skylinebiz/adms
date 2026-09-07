@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "admin-ui",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "admin-ui", "run", "dev"],
+      "port": 5173
+    }
+  ]
+}

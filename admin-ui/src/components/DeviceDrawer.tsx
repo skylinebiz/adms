@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, ApiError, CompanyOption, Device } from "../api";
 import { DEFAULT_TIMEZONE, TIMEZONE_OPTIONS } from "../utils/timezoneOptions";
+import { formatDateTime } from "../utils/dateFormat";
 
 interface Props {
   deviceId: string | null;
@@ -109,7 +110,7 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
               <div>
                 <span className={`badge badge-${device.status.toLowerCase()}`}>{device.status}</span>{" "}
                 <span className="muted">
-                  {device.lastSeenAt ? `last seen ${new Date(device.lastSeenAt).toLocaleString()}` : "never seen"}
+                  {device.lastSeenAt ? `last seen ${formatDateTime(device.lastSeenAt)}` : "never seen"}
                 </span>
               </div>
             </div>

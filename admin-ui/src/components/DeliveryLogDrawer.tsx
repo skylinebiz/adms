@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, PunchRecord, WebhookDelivery } from "../api";
 import { formatPunchTime } from "../utils/formatTime";
+import { formatDateTime } from "../utils/dateFormat";
 import { webhookStatusLabel } from "../utils/webhookStatus";
 import Pagination from "./Pagination";
 
@@ -100,7 +101,7 @@ export default function DeliveryLogDrawer({ punchRecordId, onClose }: { punchRec
                     {d.delivered ? "delivered" : "failed"}
                   </span>
                 </div>
-                <div className="muted">{new Date(d.createdAt).toLocaleString()}</div>
+                <div className="muted">{formatDateTime(d.createdAt)}</div>
                 <div className="mono" style={{ marginTop: 6, fontSize: 11, wordBreak: "break-all" }}>
                   POST {d.url}
                 </div>
