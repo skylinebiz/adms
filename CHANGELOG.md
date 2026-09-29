@@ -12,6 +12,23 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.16.0] - 2026-09-28
+
+### Changed
+
+- **One way to add a device: ping, then claim.** The Devices page's
+  "+ Register device" popup (manual serial number entry) is gone - there
+  were two parallel ways to add a device and admins kept asking which one
+  to use. The button is now **+ Add device** and takes you straight to
+  **Unregistered Devices**, which gained a numbered "How to add a device"
+  guide (point the device at the Cloud Server URL → wait for its first
+  ping → pick a timezone and Claim). The "Connect a device" notes and
+  empty-table messages on both pages now describe only that flow.
+- `DeviceDrawer` is edit-only now (its create mode and the admin UI's
+  `api.createDevice` client were removed). The backend
+  `POST /api/admin/devices` endpoint is unchanged and still available for
+  scripted/emergency use - this is a UI-only change.
+
 ## [2.15.0] - 2026-09-07
 
 ### Added

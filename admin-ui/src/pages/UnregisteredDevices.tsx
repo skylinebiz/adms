@@ -106,17 +106,34 @@ export default function UnregisteredDevices() {
   return (
     <div>
       <h2>Unregistered Devices</h2>
-      <p className="muted">
-        These serial numbers pinged /iclock/* but aren't registered as a device yet. If one arrived via your
-        company's URL, that secret is captured here and carries straight into the device record when you claim it -
-        nothing to reconfigure on the device afterward. Pick the device's timezone before claiming (required - used
-        for accurate punch times and to tell the device itself its clock/timezone), or delete it if it's just noise.
-      </p>
+      {/* The one supported way to add a device (v2.16.0 dropped the manual
+          "Register device" form from the Devices page) - spelled out as
+          explicit steps so nobody goes looking for another path. */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <h3 style={{ marginTop: 0 }}>How to add a device</h3>
+        <ol style={{ margin: 0, paddingLeft: 20 }}>
+          <li>
+            On the device, set the Cloud Server address to one of the URLs in <strong>Connect a device</strong> below.
+          </li>
+          <li>
+            Wait for its first ping — it appears in the table at the bottom of this page with its secret already
+            captured (refresh if it doesn't show up right away).
+          </li>
+          <li>
+            Pick the device's timezone and click <strong>Claim</strong>. It then moves to <strong>Devices</strong>,
+            with nothing to reconfigure on the device itself.
+          </li>
+        </ol>
+        <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
+          The timezone is required — it's used for accurate punch times and to tell the device its own clock/timezone.
+          If a row here is just noise, delete it instead.
+        </p>
+      </div>
 
       <ConnectDeviceCard
         companies={companies}
         isSuperAdmin={isSuperAdmin}
-        trailingNote="Pick any secret string — it becomes that device's secret automatically once you register it, or the moment it first pings it shows up right here, ready to claim."
+        trailingNote="Pick any secret string — it's captured automatically on the device's first ping and becomes its secret when you claim it."
       />
 
       {error && <div className="error-banner">{error}</div>}
@@ -242,7 +259,7 @@ export default function UnregisteredDevices() {
                   {pings.length === 0 && (
                     <tr>
                       <td colSpan={emptyStateColSpan} className="muted">
-                        No unregistered pings recorded.
+                        Waiting for a device to ping… Configure it using the URL above, then refresh this page.
                       </td>
                     </tr>
                   )}

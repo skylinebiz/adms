@@ -19,7 +19,7 @@ export default function Devices() {
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [drawer, setDrawer] = useState<{ mode: "create" | "edit"; deviceId: string | null } | null>(null);
+  const [editDeviceId, setEditDeviceId] = useState<string | null>(null);
   const [webhookDeviceId, setWebhookDeviceId] = useState<string | null>(null);
   const [commandsDevice, setCommandsDevice] = useState<{ id: string; serialNumber: string } | null>(null);
 
@@ -59,9 +59,11 @@ export default function Devices() {
     <div>
       <div className="toolbar">
         <h2 style={{ margin: 0 }}>Devices</h2>
-        <button className="btn btn-primary" onClick={() => setDrawer({ mode: "create", deviceId: null })}>
-          + Register device
-        </button>
+        {/* No manual register form any more (v2.16.0) - devices are added by
+            letting them ping and claiming them from Unregistered Devices. */}
+        <Link className="btn btn-primary" to="/unregistered-devices">
+          + Add device
+        </Link>
       </div>
       {error && <div className="error-banner">{error}</div>}
 
@@ -70,8 +72,8 @@ export default function Devices() {
         isSuperAdmin={user?.role === "SUPER_ADMIN"}
         trailingNote={
           <>
-            Pick any secret string — it becomes that device's secret automatically once you register it, or gets
-            captured the moment it first pings and you can claim it from <strong>Unregistered Devices</strong>.
+            Pick any secret string. Once the device pings, it appears under <strong>Unregistered Devices</strong> with
+            that secret already captured — claim it there and it shows up in this list.
           </>
         }
       />
@@ -125,7 +127,7 @@ export default function Devices() {
                       )}
                     </td>
                     <td className="actions-cell">
-                      <button className="btn btn-sm" onClick={() => setDrawer({ mode: "edit", deviceId: d.id })}>
+                      <button className="btn btn-sm" onClick={() => setEditDeviceId(d.id)}>
                         Edit
                       </button>
                       <button className="btn btn-sm" onClick={() => setWebhookDeviceId(d.id)}>
@@ -152,7 +154,8 @@ export default function Devices() {
                 {devices.length === 0 && (
                   <tr>
                     <td colSpan={7} className="muted">
-                      No devices registered yet.
+                      No devices yet. Point a device at the URL above, then claim it from{" "}
+                      <Link to="/unregistered-devices">Unregistered Devices</Link>.
                     </td>
                   </tr>
                 )}
@@ -164,12 +167,11 @@ export default function Devices() {
         )}
       </div>
 
-      {drawer && (
+      {editDeviceId && (
         <DeviceDrawer
-          mode={drawer.mode}
-          deviceId={drawer.deviceId}
+          deviceId={editDeviceId}
           companies={companies}
-          onClose={() => setDrawer(null)}
+          onClose={() => setEditDeviceId(null)}
           onSaved={load}
         />
       )}

@@ -1,4 +1,4 @@
-// Shared by DeviceDrawer (create/edit) and UnregisteredDevices (claim) -
+// Shared by DeviceDrawer (edit) and UnregisteredDevices (claim) -
 // both need the same "pick an IANA timezone" dropdown.
 
 // A modest hand-picked fallback for the rare browser without

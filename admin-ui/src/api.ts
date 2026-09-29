@@ -250,17 +250,6 @@ export const api = {
   listDeviceOptions: (companyId?: string) =>
     get<{ devices: DeviceOption[] }>(`/devices/options${buildQuery({ companyId })}`),
   getDevice: (id: string) => get<{ device: Device }>(`/devices/${id}`),
-  createDevice: (data: {
-    companyId: string;
-    serialNumber: string;
-    label?: string;
-    deviceSecret: string;
-    timezone: string;
-    webhookUrl?: string;
-    webhookEnabled?: boolean;
-    webhookHeaders?: Record<string, string> | null;
-    webhookBodyTemplate?: unknown | null;
-  }) => post<{ device: Device }>("/devices", data),
   updateDevice: (
     id: string,
     data: Partial<{

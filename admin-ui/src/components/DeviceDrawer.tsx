@@ -4,10 +4,8 @@ import { DEFAULT_TIMEZONE, TIMEZONE_OPTIONS } from "../utils/timezoneOptions";
 import { formatDateTime } from "../utils/dateFormat";
 
 interface Props {
-  deviceId: string | null;
-  mode: "create" | "edit";
+  deviceId: string;
   companies: CompanyOption[];
-  defaultCompanyId?: string;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -21,51 +19,44 @@ function generateRandomSecret(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-// Device *definition* only - serial number, label, secret, timezone.
+// Edits an existing device's *definition* only - label, secret, timezone.
 // Webhook config and the raw command tool each have their own dedicated
-// drawer now (WebhookDrawer, DeviceCommandsDrawer), opened directly from
-// the Devices list, since this form was getting congested carrying all
-// three at once. Both of those only make sense for an already-existing
-// device, so neither ever belonged in create mode anyway.
-export default function DeviceDrawer({ deviceId, mode, companies, defaultCompanyId, onClose, onSaved }: Props) {
+// drawer (WebhookDrawer, DeviceCommandsDrawer), opened directly from the
+// Devices list.
+//
+// Edit-only since v2.16.0: the admin panel no longer has a manual
+// "Register device" form. The one supported way to add a device is to
+// point it at the Cloud Server URL, let it ping, and claim it from
+// Unregistered Devices - two parallel paths kept confusing admins about
+// which one to use. POST /api/admin/devices itself still exists for
+// scripted/emergency use; there's just no UI for it.
+export default function DeviceDrawer({ deviceId, companies, onClose, onSaved }: Props) {
   const [device, setDevice] = useState<Device | null>(null);
-  const [companyId, setCompanyId] = useState(defaultCompanyId ?? companies[0]?.id ?? "");
-  // Prefer the device's own joined company (edit mode, always accurate)
-  // over a lookup by the currently-selected companyId (create mode, or
-  // before the device has loaded) - both should normally agree.
-  const selectedCompanySlug = device?.company?.slug ?? companies.find((c) => c.id === companyId)?.slug ?? "";
-  const [serialNumber, setSerialNumber] = useState("");
   const [label, setLabel] = useState("");
   const [deviceSecret, setDeviceSecret] = useState("");
-  // Mandatory on every device now - default to IST as a starting point
-  // for create mode (this deployment's primary operating timezone), still
-  // freely changeable before saving.
   const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // GET /devices/:id's joined company carries no slug, so fall back to
+  // the company options list (which always does) to build the URL.
+  const companySlug =
+    device?.company?.slug ?? companies.find((c) => c.id === device?.companyId)?.slug ?? "";
 
   useEffect(() => {
-    if (mode === "edit" && deviceId) {
-      api.getDevice(deviceId).then(({ device }) => {
-        setDevice(device);
-        setCompanyId(device.companyId);
-        setLabel(device.label ?? "");
-        setDeviceSecret(device.deviceSecret ?? "");
-        setTimezone(device.timezone);
-      });
-    }
-  }, [mode, deviceId]);
+    api.getDevice(deviceId).then(({ device }) => {
+      setDevice(device);
+      setLabel(device.label ?? "");
+      setDeviceSecret(device.deviceSecret ?? "");
+      setTimezone(device.timezone);
+    });
+  }, [deviceId]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setSaving(true);
     try {
-      if (mode === "create") {
-        await api.createDevice({ companyId, serialNumber, label: label || undefined, deviceSecret, timezone });
-      } else if (deviceId) {
-        await api.updateDevice(deviceId, { label, deviceSecret, timezone });
-      }
+      await api.updateDevice(deviceId, { label, deviceSecret, timezone });
       onSaved();
       onClose();
     } catch (err) {
@@ -78,33 +69,15 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-drawer" onClick={(e) => e.stopPropagation()}>
-        <h3>{mode === "create" ? "Register device" : `Device: ${device?.serialNumber ?? ""}`}</h3>
+        <h3>Device: {device?.serialNumber ?? ""}</h3>
         {error && <div className="error-banner">{error}</div>}
         <form onSubmit={onSubmit}>
-          {mode === "create" && (
-            <>
-              <div className="field">
-                <label>Company</label>
-                <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} required>
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label>Serial number (SN)</label>
-                <input value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} required />
-              </div>
-            </>
-          )}
           <div className="field">
             <label>Label</label>
             <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Front Door" />
           </div>
 
-          {mode === "edit" && device && (
+          {device && (
             <div className="field">
               <label>Status</label>
               <div>
@@ -128,16 +101,12 @@ export default function DeviceDrawer({ deviceId, mode, companies, defaultCompany
                 Generate
               </button>
             </div>
-            {deviceSecret && (
+            {deviceSecret && companySlug && (
               <div style={{ marginTop: 8 }}>
                 <label>Cloud Server URL</label>
                 <input
                   readOnly
-                  value={
-                    selectedCompanySlug
-                      ? `${window.location.origin}/${selectedCompanySlug}/${deviceSecret}`
-                      : "(select a company to see the full URL)"
-                  }
+                  value={`${window.location.origin}/${companySlug}/${deviceSecret}`}
                   onFocus={(e) => e.target.select()}
                 />
               </div>
