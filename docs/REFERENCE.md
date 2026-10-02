@@ -1,0 +1,809 @@
+# Technical Reference
+
+Full technical reference for the Multitenant ADMS Server — architecture,
+protocol behavior, webhooks, timezones, self-hosting, and tests. For a quick
+overview, see the [README](../README.md).
+
+Protocol behavior mirrors [`saifulcoder/adms-server-ZKTeco`](https://github.com/saifulcoder/adms-server-ZKTeco)
+(single-tenant PHP reference), reimplemented in Node/TypeScript with
+multitenancy and per-device webhooks added on top.
+
+Current version: see [`package.json`](../package.json) (`version`), also
+shown in the admin UI's sidebar footer. Every change is recorded in
+[`CHANGELOG.md`](../CHANGELOG.md) with the version it shipped in.
+
+## Hosted vs. self-hosted
+
+This project is **100% open source** — self-host it and you get exactly
+the same software, with no feature or behavior differences from the
+hosted version below.
+
+[adms.adrk.in](https://adms.adrk.in) is a hosted instance of this same
+codebase, run for convenience and free to use: sign up, get your
+company's URL slug, point your devices at it, no server to run or
+maintain. Genuine usage runs free of cost indefinitely; obvious spam or
+abuse signups get blocked. It's offered on a best-effort basis, not as a
+commercial service — **there's no uptime SLA**.
+
+One architectural detail worth knowing: this app's multitenancy model
+requires a platform-level super_admin account to exist (see [First
+login](#first-login) below), but on adms.adrk.in that account is never
+used day-to-day. Every company that signs up is fully self-service and
+isolated from every other company (see [Company + device
+URLs](#company--device-urls)) — the super_admin account exists because
+the software's architecture requires one, not because anyone is actively
+reviewing or administering tenants' data.
+
+## Security: try HTTPS, fall back to a trusted network
+
+**Try HTTPS first.** Many newer ZKTeco/eSSL devices let you point their
+Cloud Server Setting at an `https://` address, and if yours does, use it
+— that's a real, encrypted connection, no caveats below apply. On
+[adms.adrk.in](https://adms.adrk.in) this is available out of the box. If
+you're self-hosting: this server's own process only speaks plain HTTP
+(see [Architecture](#architecture)) — put a TLS-terminating reverse proxy
+(nginx, Caddy, a cloud load balancer) in front of it and point devices at
+that address instead of directly at port `8080`.
+
+**If your device can't do HTTPS** — common on older firmware, which often
+has no TLS/certificate support at all — it falls back to plain HTTP, and
+everything it sends (serial numbers, punch/attendance data, raw
+OPERLOG/USERINFO/FINGERTMP/FACE payloads) travels **unencrypted and
+unauthenticated, as raw text**. Anyone on the same network path can read
+or spoof that traffic — a real man-in-the-middle risk. This is the one
+case where you should **not expose the ADMS port to the open internet.**
+Keep it on a trusted network instead:
+
+- A **private LAN** the devices and server both sit on, with no direct
+  internet exposure of the ADMS port, or
+- A **VPN/private tunnel** (site-to-site VPN, WireGuard, Tailscale, etc.)
+  between the device's network and the server if they aren't on the same LAN.
+
+Every device also requires a per-device secret in its URL (see [Company +
+device URLs](#company--device-urls) below), picked by you and embedded in
+the device's own configuration. It's not encryption — it's security by
+obscurity — but it's real: forging punch data for a device requires
+actually knowing or guessing its secret, not just its serial number. It's
+a second layer on top of the HTTPS-or-trusted-network decision above, not
+a replacement for it.
+
+The admin panel (`/api/admin/*`, `/admin`) is authenticated (JWT session
+cookies, bcrypt-hashed passwords) but still travels over plain HTTP unless
+it's behind the same TLS-terminating reverse proxy — worth doing even on a
+private network, since admin session cookies and credentials pass through
+it.
+
+## Architecture
+
+- **`server.ts`** — the only process devices ever talk to. Serves the
+  unauthenticated `/iclock/*` ADMS routes, the password-protected
+  `/api/admin/*` JSON API, and the built admin SPA under `/admin`. It only
+  ever **inserts** `PunchRecord` rows — it never calls a webhook itself.
+- **`worker.ts`** — a completely separate process. Polls Postgres on an
+  interval for punch records that haven't been webhook-delivered yet, and
+  is the only thing that ever makes an outbound webhook call.
+- **Postgres is the queue.** No Redis, no broker. `PunchRecord.webhookDelivered`
+  / `nextAttemptAt` / `webhookAttempts` are the entire retry/backoff state.
+
+This split matters: a slow or unreachable tenant webhook can never delay the
+`OK` a device is waiting on, because the ingestion process never touches the
+network for webhook delivery.
+
+## Pointing a device at this server
+
+Works the same on ZKTeco and eSSL devices — on the device: **Menu → COMM →
+Cloud Server Setting** (some eSSL menus label it differently, but it's the
+same setting).
+
+- **Enable Domain Name**: **ON**
+- **Server address**:
+  `<protocol>://<host>:<port>/<your-company-slug>/<any-secret-you-choose>`
+  (see [Company + device URLs](#company--device-urls) below) — the company
+  slug is required; there's no bare `<host>:<port>` fallback. Try these in
+  order, most secure first, falling back only as far as your firmware
+  actually forces you to:
+  1. `https://your-server.example.com/your-company/your-secret` — real
+     TLS, no caveats. Use this if your device's Cloud Server Setting
+     accepts it at all (see
+     [Security](#security-try-https-fall-back-to-a-trusted-network) above).
+  2. `http://your-server.example.com/your-company/your-secret` — plain
+     HTTP. Only over a trusted network (private LAN or VPN) — never
+     expose this to the open internet, see
+     [Security](#security-try-https-fall-back-to-a-trusted-network) above.
+  3. `your-server.example.com/your-company/your-secret` — no scheme at
+     all. Some older ZKTeco/eSSL firmware's Cloud Server Setting field
+     rejects (or silently drops) a `http://`/`https://` prefix — if the
+     field won't accept option 2 as typed, try the bare host/path
+     instead. Firmware that accepts this still only ever speaks plain
+     HTTP underneath, so the same trusted-network-only caveat as #2 applies.
+
+  The device itself won't tell you which of these worked — a wrong or
+  unreachable address just fails silently, with no error shown on the
+  device. Try one, wait a few seconds to a minute, and check this
+  platform's **Unregistered Devices** page: once its serial number shows
+  up there, that address works and you can stop. If nothing appears, move
+  to the next option in the list.
+
+The device itself appends `/iclock/cdata`, `/iclock/getrequest`, etc. after
+whatever base address you gave it (eSSL firmware appends `.aspx` to those
+same paths — both are handled) — there's nothing else to configure on the
+device.
+
+Before a device's punches will be captured, it has to be added as a
+device. There's exactly one way to do that in the admin panel:
+
+1. Point the device at your company's URL (see below).
+2. Its first ping shows up under **Unregistered Devices**, already
+   attributed to your company, with its secret captured.
+3. Pick its timezone and **Claim** it (the ⊕ icon in its row) — it moves to
+   **Devices**, with nothing to reconfigure on the device afterward.
+
+The Devices page's **+ Add device** button just takes you to
+Unregistered Devices — there's no manual "type in a serial number" form. `POST /api/admin/devices` still exists for scripted use.
+
+## Company + device URLs
+
+Every company gets a URL slug at signup (or company-create, for
+super_admin) — the first path segment of every device URL under that
+company: `<host>:<port>/<company-slug>/<secret>`. The `<secret>` segment
+after it is a **mandatory per-device** secret — every device must have
+one, freely chosen per device, not required to be unique, and not
+generated by this server:
+
+- **Company slug**: identifies which company a not-yet-registered device's
+  ping belongs to, so it shows up under that company's own **Unregistered
+  Devices** view instead of a global bucket only a super_admin can see.
+  Matched case-insensitively (stored slugs are always lowercase, but a
+  device's URL is typed into a physical keypad by a human). It plays no
+  role once a device is actually registered — SN + per-device secret alone
+  decide trust for a claimed device, regardless of which slug the request
+  arrived with. Fixed at creation time; there's no way to edit a company's
+  slug afterward, since that would silently orphan every device already
+  pointed at the old URL.
+- **Per-device secret**: **required** — pick it yourself (or use
+  "Generate" in the device's edit drawer) and put the full URL — company
+  slug **and** secret — into the device's Cloud Server Setting. Its first
+  ping captures the secret automatically, and it's carried into the
+  device record the moment you claim it — nothing to reconfigure on the
+  device afterward.
+- Once a device is registered, any request claiming its SN with a missing
+  or wrong secret is **rejected outright** (`401 Unauthorized`) — see
+  [ADMS response codes](#adms-response-codes-and-retry-behavior) below for
+  the full policy.
+- Secrets don't need to be unique across devices, even within the same
+  company (nothing stops you from reusing one, though there's no reason
+  to) — the server always looks a device up by SN first and only uses the
+  secret to validate that specific request.
+- There's no bare `<host>:<port>/iclock/...` fallback — every request must
+  carry a company slug (even an unresolvable/typo'd one) to reach the
+  device-facing routes at all.
+
+### Self-service device claiming
+
+A `company_admin` can view and claim pending devices attributed to their
+own company directly from **Unregistered Devices** — no super_admin
+involved, as long as the device actually pinged that company's URL. The
+unscoped bucket (a typo'd/unresolved company slug) stays super_admin-only
+to triage, since there's no way to know which company an unattributed ping
+actually belongs to.
+
+Until a device is claimed, its data-bearing pings (punch batches, device
+command acks) are **not** silently discarded — see the next section for
+why, and what to expect from an unclaimed device in the meantime.
+
+Before claiming, also see [Telling the device its own
+timezone](#telling-the-device-its-own-timezone) below, and specifically
+the "clock can go wrong before you ever get to set its timezone"
+subsection under it — the recommended sequence is to claim with the
+correct timezone _before_ treating a device as live, then restart it.
+
+## ADMS response codes and retry behavior
+
+Every `/iclock/*` response falls into one of four cases. ADMS device
+firmware (ZKTeco, eSSL, or otherwise) only understands "got a clean 2xx"
+vs "something went wrong, back off and retry" — it can't distinguish
+_why_ — so getting the right code matters far less than getting the
+right ack-vs-retry decision:
+
+| Response                    | When                                                                                                                                                                                                                                 | Why                                                                                                                                                                                                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `200 OK`                    | Handshake/heartbeat (`GET cdata`), `getrequest`, `test` — always, regardless of whether the SN is registered. Data-bearing requests (`POST cdata`, `POST devicecmd`) from a **registered, trusted** device once successfully stored. | Keeps an unclaimed device in a healthy poll loop so it keeps re-announcing itself; confirms real data actually landed.                                                                                                                                      |
+| `401 Unauthorized`          | A data-or-handshake request for a **registered** device whose secret is missing or doesn't match.                                                                                                                                    | Protects a real device's identity — this is the one case retrying won't help until a human fixes the device's configured secret.                                                                                                                            |
+| `503 Service Unavailable`   | A data-bearing request (`POST cdata`, `POST devicecmd`) for an SN that **isn't registered yet**.                                                                                                                                     | The data can't be stored (there's no company to attach it to), but claiming the device later doesn't retroactively recover data that was already acked away — so it's withheld instead, and the device retries on its own backoff until an admin claims it. |
+| `500 Internal Server Error` | A transient failure storing data for a registered, trusted device (e.g. Postgres briefly unreachable), or any other unhandled error.                                                                                                 | Same reasoning as 503 - retrying is likely to succeed once the transient condition clears, so the device should keep the data and try again rather than lose it.                                                                                            |
+
+A few implementation details worth knowing:
+
+- **Punch batches are atomic.** A `POST cdata?table=ATTLOG` batch is stored
+  in one all-or-nothing statement — a failure partway through can never
+  leave a half-written batch behind. If the whole statement fails because
+  of a genuinely unstorable record (e.g. a stray NUL byte in a line, which
+  Postgres refuses to store in a text column), the server falls back to
+  inserting one record at a time so only that specific line is skipped
+  (logged loudly) instead of losing, or permanently retrying, the rest of
+  an otherwise-good batch.
+- **Oversized payloads are the one deliberate exception to "withhold on
+  failure."** A payload over `ADMS_MAX_BODY_SIZE` (see
+  [Environment variables](#environment-variables)) still gets acked `OK` -
+  retrying an identical oversized payload would fail identically forever,
+  so withholding the ack would just wedge the device on it permanently
+  instead of helping. The dropped payload is logged and visible in **Raw
+  Request Log** with a note explaining why it wasn't recorded.
+- **`/health`** (used by the Docker healthcheck) does a real database
+  round-trip, not just "is the process up" — it returns `503` if Postgres
+  is unreachable.
+
+## Running with Docker (recommended)
+
+1. Copy the env template and fill in real values:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   At minimum set `JWT_SECRET`, `ADMIN_BOOTSTRAP_EMAIL`, and
+   `ADMIN_BOOTSTRAP_PASSWORD`.
+
+2. Bring up Postgres, run migrations, then start the server and worker —
+   all in one command:
+
+   ```bash
+   docker compose up -d --build
+   ```
+
+   A one-shot `migrate` service applies `prisma migrate deploy` and exits;
+   `server` and `worker` wait for it to finish successfully
+   (`depends_on: condition: service_completed_successfully`) before they
+   start, so there's no manual migration step and no race between multiple
+   containers trying to migrate at once.
+
+3. Sign up a company at `http://<host>:8080/admin/signup`, then point a
+   device at `<host>:8080/<your-company-slug>/<any-secret>` (see
+   [Company + device URLs](#company--device-urls) below).
+
+Only `server` publishes a port (`8080`) — it handles both device traffic
+(`/iclock/*`) and the admin panel (`/admin`). `worker` has no exposed port;
+it only makes outbound webhook calls.
+
+If you change `prisma/schema.prisma` later and need to re-apply migrations
+against an already-running stack, run the one-shot service again:
+
+```bash
+docker compose run --rm migrate
+```
+
+### First login
+
+Log in at `/admin` with `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD`.
+This seed only ever runs once — the very first time the `AdminUser` table is
+empty, and only ever creates a **super_admin** (the platform operator
+account, with access across every company). **Change this password
+immediately** after first login (the UI will force you to on first login).
+From then on, the bootstrap env var is irrelevant; the account's real
+password lives in the database.
+
+### Self-signup (companies)
+
+Individual companies don't need a super_admin to onboard them — anyone can
+create their own company from `/admin/signup`: a company name, a URL slug
+(see [Company + device URLs](#company--device-urls) below), an email, and a
+password. This creates the company and its first admin account
+(`company_admin`, scoped to that company only) in one step, already logged
+in. The bootstrap super_admin above is only for the platform operator
+account — every company after that signs itself up.
+
+## Local development (without Docker)
+
+Requires Node 20+ and a Postgres instance (local or Dockerized just for the
+DB):
+
+```bash
+npm install
+cp .env.example .env   # point DATABASE_URL at your local Postgres
+npx prisma migrate dev
+npm run dev:server      # ADMS + admin API, http://localhost:8080
+npm run dev:worker      # webhook delivery worker, separate terminal
+```
+
+To build and serve the admin SPA locally through the same server (rather
+than Vite's own dev server):
+
+```bash
+cd admin-ui && npm install && npm run build
+```
+
+`server.ts` serves `admin-ui/dist` under `/admin` automatically if it exists.
+
+Or run the admin UI's own dev server (proxies `/api` to `:8080`):
+
+```bash
+cd admin-ui && npm run dev
+```
+
+## Testing the protocol without hardware
+
+The ADMS endpoints are unauthenticated plain HTTP, so `curl`/Postman work
+fine for simulating a device. Every URL needs a company slug + secret
+prefix (see [Company + device URLs](#company--device-urls)) — substitute
+your own signed-up company's slug for `acme-corp` below.
+
+**Handshake:**
+
+```bash
+curl "http://localhost:8080/acme-corp/my-secret/iclock/cdata?SN=BOCK200961014&options=all&pushver=2.4.0"
+```
+
+**Push punch records (ATTLOG):** body is tab-separated,
+`<PIN>\t<datetime>\t<status>\t<verify-mode>\t<workcode>\t<reserved>\t<reserved>`,
+one record per line, `\r\n`-separated:
+
+```bash
+curl -X POST "http://localhost:8080/acme-corp/my-secret/iclock/cdata?SN=BOCK200961014&table=ATTLOG" \
+  --data-binary $'1\t2024-07-28 01:25:24\t0\t1\t\t0\t0\r\n4\t2024-07-28 10:41:31\t0\t1\t\t0\t0'
+```
+
+A device with serial number `BOCK200961014` must already be registered
+under a company (claimed from Unregistered Devices, or `POST /api/admin/devices`) for the
+punches to be captured — otherwise the ping is logged under **Unregistered
+Devices** and no `PunchRecord` rows are created.
+
+**Command poll / connectivity test:**
+
+```bash
+curl "http://localhost:8080/acme-corp/my-secret/iclock/getrequest?SN=BOCK200961014"
+curl "http://localhost:8080/acme-corp/my-secret/iclock/test"
+```
+
+Every one of these must return exactly `OK` (or the config text for
+`cdata` GET) with `Content-Type: text/plain` — anything else and real
+firmware will back off and keep retrying.
+
+## Raw data / debugging
+
+Two views exist purely for seeing what a device is actually sending, for
+debugging firmware quirks:
+
+- **Raw Data Dump** (admin panel → any admin) — everything a _registered_
+  device pushes to `/iclock/cdata` that isn't a punch: `OPERLOG`,
+  `USERINFO`, `FINGERTMP`, `FACE`, photos, or any other table name a
+  firmware variant sends. Browsable per device, filterable by table name.
+  Company admins only see their own company's devices; super admins can
+  view any device. Also reachable from Devices → a device's Raw Data
+  (file-code) icon.
+- **Raw Request Log** (admin panel → super admin only) — an unconditional
+  firehose of _every_ `/iclock/*` request, registered or not, any table,
+  including heartbeats. This is the lowest-level "what is actually hitting
+  this server" view, filterable by serial number or endpoint.
+
+Both store method, query string, headers, and the raw body (truncated at
+10,000 characters) per entry. These tables grow with traffic volume — the
+Raw Request Log especially, since it logs every heartbeat — so periodic
+pruning is worth setting up for a long-running production deployment; none
+is built in.
+
+A third tool, in its own dedicated dialog (admin panel → Devices →
+"Commands" on a device's row), is for finding out what a given firmware
+actually _does_ rather than just what it sends: queue an arbitrary raw
+command, delivered on the device's next `/iclock/getrequest` poll as
+`C:<id>:<command>`, and see whether/how it responds. There's no complete
+public spec for this protocol, so for anything not already covered by
+this server, this is often the only way to find out - see "Telling the
+device its own timezone" above for the investigation that led to
+building it.
+
+### Deleting records
+
+Punch Records, Failed Webhooks, Raw Data Dump, and Raw Request Log all
+support single-row and bulk delete (a header checkbox selects every row
+currently on the page; a "Delete selected (N)" button acts on the
+selection) — **super admin only**, even for a company_admin's own data, since
+these are audit/attendance history and deletion is irreversible. Deleting a
+punch record cascades to its webhook delivery attempt history.
+
+### Data retention
+
+Beyond manual deletion above, the platform also **automatically and
+permanently deletes** anything older than a configurable retention
+window — **admin panel → Settings → Data retention**, super admin only,
+platform-wide (one value, applies across every company). Default:
+**30 days**. In scope: punch/attendance records (and their cascaded
+webhook delivery history), Raw Data Dump entries, Raw Request Log
+entries, Unregistered Devices ping history, and device command history.
+Companies, devices, and admin accounts are never touched, regardless of
+age.
+
+A background sweep in `worker.ts` enforces this once an hour (and once
+immediately on worker startup) — there is no manual trigger and no undo.
+Lowering the value takes effect on the next sweep, not retroactively
+against anything already past the *old* window but not yet past the new
+one.
+
+**[adms.adrk.in](https://adms.adrk.in) runs a 10-day retention window**,
+not the 30-day default — if you're integrating against the hosted
+instance, make sure your receiving server actually consumes (or your own
+webhook successfully delivers) punch data within 10 days of it being
+captured. Past that window the underlying record is gone, not just the
+delivery attempt, so retrying a failed webhook past that point has
+nothing left to retry.
+
+## Webhook delivery
+
+Each device has its own `webhookUrl` + `webhookSecret` + `webhookEnabled`
+toggle, configured from its own dedicated **Webhook** dialog (admin panel
+→ Devices → the "Webhook" button on that device's row) — kept separate
+from the device-definition edit form so the two don't crowd each other.
+The Devices list itself never shows the URL, not even masked — just
+whether a webhook is configured and, if so, whether it's enabled. When
+set, every captured punch is POSTed as JSON to that URL:
+
+Since this is the server itself making an outbound request to a URL any
+company_admin controls, a URL that resolves to a loopback, RFC1918/private,
+link-local, or the cloud metadata address (`169.254.169.254`) is rejected
+at save time and at send time (`src/utils/ssrfGuard.ts`) — otherwise this
+would be a straightforward SSRF primitive, especially via the "Send test
+webhook" button, which echoes the response straight back to the caller.
+The guard checks the resolved IP at the moment of the request; it does not
+pin that IP for the `fetch()` that follows, so it doesn't fully close a
+DNS-rebinding attack (attacker controls the domain, flips its DNS record
+between the check and the request) — worth hardening further if this ever
+needs to be airtight against a determined attacker rather than block the
+obvious payloads.
+
+```json
+{
+  "event": "punch.created",
+  "company_id": "…",
+  "device_id": "…",
+  "device_serial": "BOCK200961014",
+  "pin": "1",
+  "punch_time": "2024-07-28T01:25:24.000Z",
+  "punch_time_utc": "2024-07-27T19:55:24.000Z",
+  "device_timezone": "Asia/Kolkata",
+  "status": 0,
+  "verify_mode": 1,
+  "work_code": null,
+  "received_at": "2026-08-11T18:47:52.526Z"
+}
+```
+
+signed with `X-Webhook-Signature: sha256=<hmac_sha256_hex(secret, raw_json_body)>`.
+
+**`punch_time` is not a real UTC instant** — it's the device's literal
+wall-clock digits (`YYYY-MM-DD HH:mm:ss` from the ATTLOG line) stamped with
+a `Z` suffix, because the device sends no timezone information at all.
+`received_at` (server-generated) is real UTC. If you need `punch_time` in a
+particular timezone, treat the digits as-is (parse with a fixed UTC offset,
+don't let your JSON/date library "helpfully" convert it) — the admin
+panel's Punch Records / Failed Webhooks / delivery-log views do exactly
+this (render in forced UTC) so the displayed time always matches what the
+device's own clock showed, regardless of the admin's browser timezone.
+
+**`punch_time_utc` is the fix for that ambiguity** — see [Device timezone
+and accurate UTC timestamps](#device-timezone-and-accurate-utc-timestamps)
+below. It's `null` unless the device has a configured timezone, so a
+receiver can tell "we don't know" apart from a real midnight-UTC value
+instead of silently getting the wrong instant. `device_timezone` is the
+device's configured IANA zone name (or `null`), so a receiver can localize
+`punch_time_utc` back to the device's own time without hardcoding it.
+
+Only a 2xx response marks it delivered. Failures back off (30s, 2m, 10m, 1h,
+6h) up to the configured max attempts (**admin panel → Settings → Webhook
+delivery**, super admin only, platform-wide — default **5**, along with
+the per-attempt timeout, default **8000 ms**), after which the record
+stays visible under **Failed Webhooks** in the admin panel for manual or
+bulk retry — "Retry now" queues exactly one more attempt on top of the
+existing count (it does not reset attempts back to zero).
+
+### "NA" status and configuring a webhook after punches already exist
+
+A punch shows **NA** (not "pending") in the admin panel whenever nothing
+will happen to it automatically right now — either its device has no
+webhook configured/enabled, or it was captured _before_ the device had a
+webhook and hasn't been retried since.
+
+That second case matters: if a device already has a backlog of punches and
+you configure a webhook on it afterward, that backlog is **not** auto-sent.
+Every punch remembers whether its device had a webhook at the moment it was
+ingested (`PunchRecord.webhookHeld`); only punches ingested _after_ the
+webhook exists are picked up automatically. To send an old backlog punch
+anyway, use **Retry now** (the ↻ icon in its row, or bulk retry) on it
+explicitly — that's the only thing that clears the hold. This avoids a surprise burst of delivery calls
+the instant a webhook URL is saved.
+
+### Custom headers and request body shape
+
+The default payload shape above isn't always what a receiving endpoint
+expects. Each device can override both, from that device's **Webhook**
+dialog (admin panel → Devices → "Webhook" on that device's row):
+
+- **Custom headers** — arbitrary key/value pairs sent with every request
+  (e.g. `Authorization: Bearer <token>` for endpoints that need their own
+  auth on top of, or instead of, the HMAC signature). Header values may
+  contain `{{placeholder}}` tokens.
+- **Custom request body** — a JSON template you write yourself, with
+  `{{placeholder}}` tokens standing in for punch data. A leaf that is
+  _exactly_ `{{status}}` is substituted with the real typed value (a JSON
+  number, not the string `"0"`); a placeholder embedded in a longer string
+  (`"Punch by {{pin}}"`) is stringified and interpolated in place. Available
+  placeholders: `pin`, `punch_time`, `punch_time_unix`, `punch_time_utc`,
+  `device_timezone`, `punch_time_frappe`, `status`, `verify_mode`,
+  `work_code`, `device_id`, `device_serial`, `company_id`, `company_name`,
+  `received_at`. Leaving this off falls back to the default `punch.created`
+  shape above. `punch_time_frappe` is `punch_time`'s same digits formatted
+  as `"YYYY-MM-DD HH:mm:ss.000000"` — the naive-timestamp string
+  Frappe/ERPNext's REST API expects (see [Webhook
+  templates](#webhook-templates) below), not generally useful elsewhere.
+
+Example custom body template:
+
+```json
+{
+  "employee_id": "{{pin}}",
+  "clock_time": "{{punch_time}}",
+  "note": "punched by {{pin}} on {{device_serial}}"
+}
+```
+
+**Send test webhook**, in the same Webhook dialog, POSTs a realistic sample
+punch (using the device's real ID/serial/company, but not a real punch
+record) to whatever URL/headers/body template are currently in the form —
+including unsaved edits — so you can verify the receiving endpoint's shape
+and auth before going live. It never writes a `PunchRecord` or
+`WebhookDelivery` row; it's a pure connectivity/shape check.
+
+### Webhook templates
+
+Above the URL field, a **"Use a template"** picker offers hardcoded
+presets for common downstream systems — selecting one prefills the URL,
+headers, and body template fields (flipping on "Use a custom request
+body" if needed) with real `{{placeholder}}` tokens already wired in.
+Everything prefilled stays fully editable; the only things left for you
+to fill in are ALL-CAPS placeholder text like `YOUR_API_KEY` — your own
+site URL, tokens, and secrets, which obviously can't be known in advance.
+Picking "Custom (enter everything manually)" leaves the fields exactly as
+they were, for anyone who'd rather not use a template at all.
+
+Templates are **hardcoded in code, not configurable from the admin UI** —
+add a new one by creating a file under `src/webhooks/templates/` (see
+`erpnext.ts` for the shape: `id`, `name`, `description`, `urlPlaceholder`,
+`headers`, `bodyTemplate`, `helpText`) and listing it in that directory's
+`index.ts`. The admin UI just reads whatever's registered there via
+`GET /api/admin/webhook-templates`.
+
+**ERPNext / Frappe HR — Employee Checkin** (the only template for now)
+logs every punch as an Employee Checkin via ERPNext's
+`add_log_based_on_employee_field` push API
+([official docs](https://docs.frappe.io/erpnext/integrating-erpnext-with-biometric-attendance-devices)).
+To use it:
+
+1. In ERPNext: your user → **Settings → API Access → Generate Keys** to
+   get an API Key and API Secret.
+2. In this app's Webhook dialog for that device: pick the template, then replace
+   `YOUR-SITE` (your ERPNext site's domain) and `YOUR_API_KEY` /
+   `YOUR_API_SECRET` (from step 1) in the prefilled URL and
+   `Authorization` header. The header uses Frappe's own token format
+   (`token <api_key>:<api_secret>`), not Bearer or Basic auth.
+3. In ERPNext, on each employee's record, set **Attendance Device ID**
+   (Employee doctype) to that person's PIN on _this_ device — that's the
+   field `employee_field_value` (`{{pin}}`) is matched against, and it's
+   not the same thing as their ERPNext employee ID.
+4. If your ERPNext predates the separate HRMS app (pre-v14-ish), change
+   `hrms` to `erpnext` in the prefilled URL.
+
+The prefilled body sends `log_type: ""`, letting ERPNext infer IN/OUT
+by alternating, since this device's actual IN/OUT status-code convention
+isn't something a generic template can know — change it to `"IN"` /
+`"OUT"` (or bind it to `{{status}}`) once you know your device's
+convention. Use **Send test webhook** to confirm the connection and
+credentials before relying on it for real punches.
+
+## Device timezone and accurate UTC timestamps
+
+Every device has a **timezone** (admin panel → Devices → Edit → "Device
+timezone", or set right on the claim form in Unregistered Devices) — the
+IANA zone name its clock is set to, e.g. `Asia/Kolkata` or
+`America/New_York`. This is what lets the server work out the real UTC
+instant behind a device's literal wall-clock digits, instead of just
+re-stamping them as if they already were UTC (see the `punch_time` caveat
+above) — and it's what gets sent back to the device itself in the ADMS
+handshake response (see "Telling the device its own timezone" below).
+
+- **Mandatory**: required both when claiming a device from Unregistered
+  Devices and via `POST /api/admin/devices` — there's no way to create a
+  device without one. Devices that existed before this requirement were
+  one-time backfilled to `Asia/Kolkata`; change it per device in the edit
+  drawer if a particular one is actually in a different zone.
+- Every punch gets **`punchTimeUtc`** computed and stored alongside
+  `punchTime` — the real UTC instant, correctly accounting for DST if the
+  zone observes it.
+- The admin panel's Punch Records / Failed Webhooks tables show this as an
+  **"Accurate time"** column, formatted in _your_ browser's timezone,
+  unlike the "Punch time" column next to it, which is always shown in
+  forced UTC to match the device's own clock verbatim.
+- The same value goes out over webhooks as `punch_time_utc` /
+  `device_timezone` — see [Webhook delivery](#webhook-delivery) above.
+
+The conversion (`src/adms/timezone.ts`) uses the IANA tz database via
+`Intl`, so it's DST-correct for any real zone; timezone names are validated
+server-side (`isValidTimeZone`) — a typo or made-up zone is rejected with a
+400 rather than silently accepted.
+
+### Telling the device its own timezone
+
+Some firmware (observed on an eSSL-branded SilkBio-101TC) resets its own
+clock the instant it gets network connectivity, with no on-device setting
+to stop it — the device's own clock ends up wrong even though this server's
+records stay correct. If a device's `timezone` is set, the handshake
+response (`GET /iclock/cdata`) includes a `TimeZone=<value>` line telling
+the device what its clock/timezone should actually be — this mirrors a
+real field in the ADMS PUSH protocol (confirmed working, live, against a
+real SilkBio-101TC, and matches every reference ADMS implementation found
+
+- e.g. the [reference project](https://github.com/saifulcoder/adms-server-ZKTeco)
+  this codebase mirrors protocol behavior from, which ships that exact field
+  commented out by default). No line is sent for a device with no timezone
+  configured.
+
+**This only takes effect on a fresh handshake** — some firmware, this
+SilkBio included, barely repeats the full `GET /iclock/cdata` handshake
+once it's up and running, living almost entirely in the `/iclock/getrequest`
+poll loop instead (confirmed: no reference implementation found ever puts
+`TimeZone=` in a getrequest response, and adding it there had no effect on
+real hardware - see [CHANGELOG.md](../CHANGELOG.md) 2.5.2/2.6.2). So setting
+or changing a device's timezone may not reach it until its next fresh
+handshake - **power-cycling the device is the reliable way to force one.**
+
+The value's encoding is confirmed working on real hardware for both cases:
+a whole-hour offset is sent as a plain signed hour integer (e.g. `7` for
+GMT+7); a fractional offset (e.g. IST's `+05:30`, Nepal's `+05:45`) is
+sent as total signed minutes (e.g. `330`) — confirmed live against a real
+SilkBio-101TC set to `Asia/Kolkata`. No single authoritative spec exists
+for this field, so this encoding was inferred from field reports and then
+verified directly on hardware. See `computeTimeZoneOptionValue` in
+`src/adms/timezone.ts`.
+
+### ⚠️ A device's clock can go wrong _before_ you ever get to set its timezone
+
+Worth understanding if your device's firmware has the clock-reset-on-connect
+quirk described above: **the very first handshake a not-yet-claimed device
+makes can never carry `TimeZone=`, no matter what.** `TimeZone=` comes from
+`Device.timezone`, and there's no `Device` row — and so no timezone to
+send — until an admin claims the device. So the sequence for a brand new
+device is unavoidably:
+
+1. You point the device at its Cloud Server URL. It makes first contact,
+   shows up under **Unregistered Devices**. If its firmware has the
+   clock-reset quirk, this is the moment its clock can go wrong — there
+   was structurally no way to tell it the right timezone yet.
+2. You claim it, setting its timezone. The device's _records_ on this
+   server are correct from this point on — but the device's own clock is
+   still whatever it was set to in step 1, since (per above) the
+   corrected `TimeZone=` only reaches it on its _next fresh handshake_,
+   and most firmware doesn't repeat that on its own once running.
+
+In between those two steps — and until the device actually gets that
+fresh handshake — any punches it records may carry an unreliable
+wall-clock timestamp, because the device's own clock may simply be wrong
+for that whole window.
+
+**Recommended sequence to avoid this:**
+
+1. After configuring the Cloud Server Setting, don't rely on real
+   check-ins/punches yet — claim the device with its correct timezone
+   _before_ treating it as live.
+2. Right after claiming it, **restart the device.** This forces the fresh
+   handshake that's the only reliable way to actually deliver the
+   corrected `TimeZone=` (see above) — without it, the device may keep
+   running on whatever clock it picked up in step 1 indefinitely.
+3. This restart doubles as an immediate check: if the wrong timezone got
+   set during claiming, it'll be visibly wrong on the device right away,
+   so you catch and fix it on the spot — rather than a later, unrelated
+   reboot (a power cut, a firmware auto-restart) silently re-triggering
+   the same clock-reset quirk at some inconvenient moment with no obvious
+   cause to trace it back to.
+
+## Device online/offline status
+
+A device's ONLINE/OFFLINE/UNKNOWN badge in the admin UI is computed on
+every read from `lastSeenAt`, never stored. ADMS device firmware has no
+"going offline" signal of its own (no disconnect notice, no last-will) —
+the only honest way to know a device stopped talking is that enough time
+has passed since its last contact:
+
+- **UNKNOWN** — never seen (`lastSeenAt` is null).
+- **ONLINE** — last contact within `DEVICE_OFFLINE_THRESHOLD_MS` (default
+  5 minutes).
+- **OFFLINE** — last contact longer ago than that.
+
+Because it's computed at read time instead of written once on contact and
+left alone, a device that pings once and then goes dark correctly shows
+OFFLINE a few minutes later, rather than staying ONLINE forever. Raising
+or lowering `DEVICE_OFFLINE_THRESHOLD_MS` takes effect immediately on the
+next read — no backfill or migration needed.
+
+## Environment variables
+
+See [`.env.example`](../.env.example) for the full list. Notable ones:
+
+| Variable                                             | Purpose                                                                                                                                                                                       |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                       | Postgres connection string                                                                                                                                                                    |
+| `JWT_SECRET`                                         | Signs admin session cookies — required, no default (server won't start without it)                                                                                                             |
+| `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` | One-time seed for the first super-admin                                                                                                                                                       |
+| `ADMS_MAX_BODY_SIZE`                                 | Max device-facing request body size (default `10mb`) — see [ADMS response codes](#adms-response-codes-and-retry-behavior)                                                                     |
+| `DEVICE_OFFLINE_THRESHOLD_MS`                        | How long (ms) after last contact a device is still shown as ONLINE (default `300000` = 5 min) — see [Device online/offline status](#device-onlineoffline-status)                              |
+| `WORKER_POLL_INTERVAL_MS` / `WORKER_BATCH_SIZE`      | How often / how many rows the worker claims per tick                                                                                                                                          |
+
+Three settings are **not** env vars, even though they used to be (or you
+might expect them to be) — they're platform-wide values stored in the
+database, changed from the admin panel (**Settings**, super admin only),
+not `.env`, and take effect immediately with no restart:
+
+- **Data retention** (default 30 days) — see [Data retention](#data-retention) above.
+- **Webhook max attempts** (default 5) and **webhook timeout** (default
+  8000 ms) — see [Webhook delivery](#webhook-delivery) above.
+
+### adms.adrk.in's configuration
+
+If you're integrating against the hosted instance rather than
+self-hosting, its non-secret configuration (so you know what to expect
+without needing to ask):
+
+- **Data retention: 10 days**, not the 30-day default — see [Data
+  retention](#data-retention) above.
+- **Webhook max attempts and timeout run at their defaults** (5 attempts,
+  8000 ms) — see [Webhook delivery](#webhook-delivery) above.
+- Every env var above runs at its documented default:
+  `ADMS_MAX_BODY_SIZE=10mb`, `DEVICE_OFFLINE_THRESHOLD_MS=300000` (5 min),
+  `WORKER_POLL_INTERVAL_MS=3000`, `WORKER_BATCH_SIZE=50`.
+
+## Tests
+
+```bash
+npm test
+```
+
+Covers the ATTLOG tab-separated line parser against the sample payloads
+from the protocol spec (including malformed-line isolation - one bad line
+must never drop the rest of a batch or crash the request), the device
+timezone conversion (`isValidTimeZone` / `zonedWallClockToUtc`, including
+DST spring-forward/fall-back edge cases), the per-device URL secret
+resolution logic, the webhook body/header templating engine, company slug
+format validation, the DB error classifier that decides retry-vs-drop
+for storage failures (`classifyDbError` — see
+[ADMS response codes](#adms-response-codes-and-retry-behavior)), and the
+data retention sweep (`tests/retention.spec.ts` for the cutoff-date math,
+`tests/dataRetention.spec.ts` for the `/settings` API and an end-to-end
+run of `runRetentionSweep()` against real rows - confirms exactly what
+gets deleted past the window and what doesn't, including that Devices/
+Companies/AdminUsers/PendingDevice are never touched).
+
+### Security test suite (`tests/security/`)
+
+Real end-to-end HTTP tests against the actual Express app and a live
+Postgres database (via [supertest](https://github.com/ladjs/supertest), no
+mocking) - unlike the pure-function unit tests above, these need
+`postgres` reachable at `localhost:5432` (`docker compose up -d postgres`
+covers it; the compose file publishes that port to `127.0.0.1` only, for
+exactly this). Every fixture they create is tagged with a per-run ID and
+deleted in `afterAll`, so a run never leaves data behind.
+
+- **`authRequired.spec.ts`** - every protected route rejects a missing,
+  garbage, wrong-secret-forged, `alg: none`, or expired session token, for
+  every method+path in the admin API.
+- **`roleAuthorization.spec.ts`** - every super_admin-only action 403s a
+  real, validly-authenticated COMPANY_ADMIN session.
+- **`crossCompanyIsolation.spec.ts`** - IDOR coverage: a COMPANY_ADMIN can
+  never read, list, or modify another company's devices, admin users, or
+  punch records by ID, even via an explicit `?companyId=` override or a
+  spoofed `companyId` in a request body.
+- **`inputValidation.spec.ts`** - malformed/hostile JSON across create and
+  update endpoints: wrong types, missing/extra fields, mass-assignment
+  attempts (role escalation, `id`/`companyId` override), SQL-injection-
+  shaped strings, prototype-pollution key names, non-object top-level
+  bodies, malformed JSON syntax, and oversized payloads - each must produce
+  a clean 400/413, never a 500 or a bypass.
+- **`ssrfWebhook.spec.ts`** - a device's `webhookUrl` (settable by any
+  COMPANY_ADMIN) can't be pointed at loopback, RFC1918, link-local, or the
+  cloud metadata address, on create, update, or the on-demand test-webhook
+  endpoint.
