@@ -7,6 +7,8 @@ import { formatAccurateTime, formatPunchTime } from "../utils/formatTime";
 import { webhookStatusLabel } from "../utils/webhookStatus";
 import DeliveryLogDrawer from "./DeliveryLogDrawer";
 import Pagination from "./Pagination";
+import { RotateCw, ScrollText, Trash2 } from "lucide-react";
+import IconButton from "./IconButton";
 
 export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) {
   const { user } = useAuth();
@@ -202,23 +204,18 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
                       </td>
                     )}
                     <td className="actions-cell">
-                      <button className="btn btn-sm" onClick={() => setViewingDeliveries(r.id)}>
-                        Log
-                      </button>
+                      <IconButton icon={ScrollText} label="Delivery log" onClick={() => setViewingDeliveries(r.id)} />
                       {r.webhookStatus !== "delivered" && (
-                        <button
-                          className="btn btn-sm"
+                        <IconButton
+                          icon={RotateCw}
+                          label="Retry now"
+                          tooltip={r.canRetry ? undefined : "Retry unavailable - no active webhook"}
                           disabled={!r.canRetry}
-                          title={r.canRetry ? undefined : "This device has no active webhook configured"}
                           onClick={() => retryOne(r.id)}
-                        >
-                          Retry now
-                        </button>
+                        />
                       )}
                       {canDelete && (
-                        <button className="btn btn-sm btn-danger" onClick={() => deleteOne(r.id)}>
-                          Delete
-                        </button>
+                        <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => deleteOne(r.id)} />
                       )}
                     </td>
                   </tr>

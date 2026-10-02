@@ -5,6 +5,8 @@ import { useSelection } from "../hooks/useSelection";
 import Pagination from "../components/Pagination";
 import RawEntryDrawer from "../components/RawEntryDrawer";
 import { formatDateTime } from "../utils/dateFormat";
+import { Eye, Trash2 } from "lucide-react";
+import IconButton from "../components/IconButton";
 
 const PAGE_SIZE = 25;
 
@@ -145,12 +147,8 @@ export default function RawRequestLogPage() {
                     </td>
                     <td>{r.rawBody?.length ?? 0} chars</td>
                     <td className="actions-cell">
-                      <button className="btn btn-sm" onClick={() => setViewing(r)}>
-                        View
-                      </button>
-                      <button className="btn btn-sm btn-danger" onClick={() => deleteOne(r.id)}>
-                        Delete
-                      </button>
+                      <IconButton icon={Eye} label="View" onClick={() => setViewing(r)} />
+                      <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => deleteOne(r.id)} />
                     </td>
                   </tr>
                 ))}

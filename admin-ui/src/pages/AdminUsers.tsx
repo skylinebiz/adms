@@ -2,6 +2,8 @@ import { FormEvent, useEffect, useState } from "react";
 import { api, AdminUserSummary, ApiError, CompanyOption } from "../api";
 import { useAuth } from "../context/AuthContext";
 import Pagination from "../components/Pagination";
+import { KeyRound, Trash2 } from "lucide-react";
+import IconButton from "../components/IconButton";
 
 const PAGE_SIZE = 25;
 
@@ -167,14 +169,10 @@ export default function AdminUsers() {
                     <td>{companies.find((c) => c.id === u.companyId)?.name ?? "—"}</td>
                     <td className="actions-cell">
                       {user?.role === "SUPER_ADMIN" && (
-                        <button className="btn btn-sm" onClick={() => setResetTarget(u.id)}>
-                          Reset password
-                        </button>
+                        <IconButton icon={KeyRound} label="Reset password" onClick={() => setResetTarget(u.id)} />
                       )}
                       {user?.role === "SUPER_ADMIN" && u.id !== user.id && (
-                        <button className="btn btn-sm btn-danger" onClick={() => onDelete(u.id)}>
-                          Delete
-                        </button>
+                        <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => onDelete(u.id)} />
                       )}
                     </td>
                   </tr>

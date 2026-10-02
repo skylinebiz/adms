@@ -145,8 +145,8 @@ device. There's exactly one way to do that in the admin panel:
 1. Point the device at your company's URL (see below).
 2. Its first ping shows up under **Unregistered Devices**, already
    attributed to your company, with its secret captured.
-3. Pick its timezone and **Claim** it — it moves to **Devices**, with
-   nothing to reconfigure on the device afterward.
+3. Pick its timezone and **Claim** it (the ⊕ icon in its row) — it moves to
+   **Devices**, with nothing to reconfigure on the device afterward.
 
 The Devices page's **+ Add device** button just takes you to
 Unregistered Devices — there's no manual "type in a serial number" form
@@ -518,8 +518,8 @@ you configure a webhook on it afterward, that backlog is **not** auto-sent.
 Every punch remembers whether its device had a webhook at the moment it was
 ingested (`PunchRecord.webhookHeld`); only punches ingested _after_ the
 webhook exists are picked up automatically. To send an old backlog punch
-anyway, use **Retry now** (or bulk retry) on it explicitly — that's the only
-thing that clears the hold. This avoids a surprise burst of delivery calls
+anyway, use **Retry now** (the ↻ icon in its row, or bulk retry) on it
+explicitly — that's the only thing that clears the hold. This avoids a surprise burst of delivery calls
 the instant a webhook URL is saved.
 
 ### Custom headers and request body shape

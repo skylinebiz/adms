@@ -252,13 +252,21 @@ tr:hover td { background: var(--surface-2); }
 .actions-cell { display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; }
 
 /* Square icon-only button. Its label lives in data-tooltip (shown on
-   hover/focus) and aria-label (for screen readers). The tooltip sits
-   above the button rather than below: .table-wrap's overflow-x: auto
-   also clips vertically, and the header row leaves room above the first
-   body row while nothing leaves room below the last one. */
+   hover/focus) and aria-label (for screen readers). */
 .btn-icon { position: relative; padding: 0; width: 28px; justify-content: center; }
 .btn-icon svg { flex-shrink: 0; }
-.btn-icon[data-tooltip]::after {
+/* .btn:disabled fades the whole element, which would also fade the
+   tooltip (often the one place that explains *why* it's disabled) -
+   fade just the icon instead. */
+.btn-icon:disabled { opacity: 1; }
+.btn-icon:disabled svg { opacity: 0.4; }
+/* Hover/focus tooltip for any element with data-tooltip (the host needs
+   position: relative - .btn-icon and .has-tooltip provide it). It sits
+   above the element rather than below: .table-wrap's overflow-x: auto
+   also clips vertically, and the header row leaves room above the first
+   body row while nothing leaves room below the last one. */
+.has-tooltip { position: relative; }
+[data-tooltip]::after {
   content: attr(data-tooltip);
   position: absolute;
   bottom: calc(100% + 6px);
@@ -276,8 +284,8 @@ tr:hover td { background: var(--surface-2); }
   transition: opacity 0.12s ease;
   z-index: 10;
 }
-.btn-icon[data-tooltip]:hover::after,
-.btn-icon[data-tooltip]:focus-visible::after { opacity: 1; }
+[data-tooltip]:hover::after,
+[data-tooltip]:focus-visible::after { opacity: 1; }
 
 /* ---------- Forms ---------- */
 

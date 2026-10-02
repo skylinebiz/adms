@@ -6,6 +6,8 @@ import Pagination from "../components/Pagination";
 import ConnectDeviceCard from "../components/ConnectDeviceCard";
 import { DEFAULT_TIMEZONE, TIMEZONE_OPTIONS } from "../utils/timezoneOptions";
 import { formatDateTime } from "../utils/dateFormat";
+import { CirclePlus, Trash2 } from "lucide-react";
+import IconButton from "../components/IconButton";
 
 const PAGE_SIZE = 25;
 
@@ -120,7 +122,9 @@ export default function UnregisteredDevices() {
             captured (refresh if it doesn't show up right away).
           </li>
           <li>
-            Pick the device's timezone and click <strong>Claim</strong>. It then moves to <strong>Devices</strong>,
+            Pick the device's timezone and click <strong>Claim</strong> (
+            <CirclePlus size={13} style={{ verticalAlign: "-2px" }} aria-hidden />
+            ). It then moves to <strong>Devices</strong>,
             with nothing to reconfigure on the device itself.
           </li>
         </ol>
@@ -241,17 +245,20 @@ export default function UnregisteredDevices() {
                         </select>
                       </td>
                       <td className="actions-cell">
-                        <button
-                          className="btn btn-sm btn-primary"
+                        <IconButton
+                          icon={CirclePlus}
+                          label="Claim"
+                          variant="primary"
                           disabled={claiming === p.serialNumber}
                           onClick={() => onClaim(p.serialNumber)}
-                        >
-                          Claim
-                        </button>
+                        />
                         {isSuperAdmin && (
-                          <button className="btn btn-sm btn-danger" onClick={() => deleteOne(p.serialNumber)}>
-                            Delete
-                          </button>
+                          <IconButton
+                            icon={Trash2}
+                            label="Delete"
+                            variant="danger"
+                            onClick={() => deleteOne(p.serialNumber)}
+                          />
                         )}
                       </td>
                     </tr>

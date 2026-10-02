@@ -6,6 +6,8 @@ import { useSelection } from "../hooks/useSelection";
 import Pagination from "../components/Pagination";
 import RawEntryDrawer from "../components/RawEntryDrawer";
 import { formatDateTime } from "../utils/dateFormat";
+import { Eye, Trash2 } from "lucide-react";
+import IconButton from "../components/IconButton";
 
 const PAGE_SIZE = 25;
 
@@ -158,13 +160,9 @@ export default function RawDataDump() {
                     <td>{l.method}</td>
                     <td>{l.rawBody?.length ?? 0} chars</td>
                     <td className="actions-cell">
-                      <button className="btn btn-sm" onClick={() => setViewing(l)}>
-                        View
-                      </button>
+                      <IconButton icon={Eye} label="View" onClick={() => setViewing(l)} />
                       {canDelete && (
-                        <button className="btn btn-sm btn-danger" onClick={() => deleteOne(l.id)}>
-                          Delete
-                        </button>
+                        <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => deleteOne(l.id)} />
                       )}
                     </td>
                   </tr>

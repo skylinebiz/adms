@@ -4,6 +4,8 @@ import { useAuth } from "../context/AuthContext";
 import { slugify } from "../utils/slug";
 import Pagination from "../components/Pagination";
 import { formatDateTime } from "../utils/dateFormat";
+import { Trash2 } from "lucide-react";
+import IconButton from "../components/IconButton";
 
 const PAGE_SIZE = 25;
 
@@ -132,10 +134,8 @@ export default function Companies() {
                       <td>{c._count?.adminUsers ?? "-"}</td>
                       <td>{formatDateTime(c.createdAt)}</td>
                       {user?.role === "SUPER_ADMIN" && (
-                        <td>
-                          <button className="btn btn-sm btn-danger" onClick={() => onDelete(c.id)}>
-                            Delete
-                          </button>
+                        <td className="actions-cell">
+                          <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => onDelete(c.id)} />
                         </td>
                       )}
                     </tr>

@@ -4,6 +4,7 @@ import { FileCode, Fingerprint, Pencil, SquareTerminal, Trash2, Webhook } from "
 import { api, ApiError, CompanyOption, Device } from "../api";
 import { useAuth } from "../context/AuthContext";
 import DeviceDrawer from "../components/DeviceDrawer";
+import IconButton from "../components/IconButton";
 import WebhookDrawer from "../components/WebhookDrawer";
 import DeviceCommandsDrawer from "../components/DeviceCommandsDrawer";
 import ConnectDeviceCard from "../components/ConnectDeviceCard";
@@ -11,7 +12,19 @@ import Pagination from "../components/Pagination";
 import { formatDateTime } from "../utils/dateFormat";
 
 const PAGE_SIZE = 25;
-const ICON_SIZE = 15;
+// Longer company names are cut to this many characters plus "…" so the
+// column stays narrow; the full name shows on hover.
+const COMPANY_NAME_MAX = 15;
+
+function CompanyName({ name }: { name?: string }) {
+  if (!name) return null;
+  if (name.length <= COMPANY_NAME_MAX) return <>{name}</>;
+  return (
+    <span className="has-tooltip" data-tooltip={name} aria-label={name}>
+      {name.slice(0, COMPANY_NAME_MAX).trimEnd()}…
+    </span>
+  );
+}
 
 export default function Devices() {
   const { user } = useAuth();
@@ -105,7 +118,11 @@ export default function Devices() {
                       <code className="mono">{d.serialNumber}</code>
                     </td>
                     <td>{d.label ?? <span className="muted">—</span>}</td>
-                    {user?.role === "SUPER_ADMIN" && <td>{d.company?.name}</td>}
+                    {user?.role === "SUPER_ADMIN" && (
+                      <td>
+                        <CompanyName name={d.company?.name} />
+                      </td>
+                    )}
                     <td>
                       <span className={`badge badge-${d.status.toLowerCase()}`}>{d.status}</span>
                     </td>
@@ -129,54 +146,16 @@ export default function Devices() {
                       )}
                     </td>
                     <td className="actions-cell">
-                      <button
-                        className="btn btn-sm btn-icon"
-                        data-tooltip="Edit"
-                        aria-label="Edit"
-                        onClick={() => setEditDeviceId(d.id)}
-                      >
-                        <Pencil size={ICON_SIZE} />
-                      </button>
-                      <button
-                        className="btn btn-sm btn-icon"
-                        data-tooltip="Webhook"
-                        aria-label="Webhook"
-                        onClick={() => setWebhookDeviceId(d.id)}
-                      >
-                        <Webhook size={ICON_SIZE} />
-                      </button>
-                      <button
-                        className="btn btn-sm btn-icon"
-                        data-tooltip="Commands"
-                        aria-label="Commands"
+                      <IconButton icon={Pencil} label="Edit" onClick={() => setEditDeviceId(d.id)} />
+                      <IconButton icon={Webhook} label="Webhook" onClick={() => setWebhookDeviceId(d.id)} />
+                      <IconButton
+                        icon={SquareTerminal}
+                        label="Commands"
                         onClick={() => setCommandsDevice({ id: d.id, serialNumber: d.serialNumber })}
-                      >
-                        <SquareTerminal size={ICON_SIZE} />
-                      </button>
-                      <Link
-                        className="btn btn-sm btn-icon"
-                        data-tooltip="Punches"
-                        aria-label="Punches"
-                        to={`/punch-records?deviceId=${d.id}`}
-                      >
-                        <Fingerprint size={ICON_SIZE} />
-                      </Link>
-                      <Link
-                        className="btn btn-sm btn-icon"
-                        data-tooltip="Raw Data"
-                        aria-label="Raw Data"
-                        to={`/raw-data?deviceId=${d.id}`}
-                      >
-                        <FileCode size={ICON_SIZE} />
-                      </Link>
-                      <button
-                        className="btn btn-sm btn-icon btn-danger"
-                        data-tooltip="Delete"
-                        aria-label="Delete"
-                        onClick={() => onDelete(d.id)}
-                      >
-                        <Trash2 size={ICON_SIZE} />
-                      </button>
+                      />
+                      <IconButton icon={Fingerprint} label="Punches" to={`/punch-records?deviceId=${d.id}`} />
+                      <IconButton icon={FileCode} label="Raw Data" to={`/raw-data?deviceId=${d.id}`} />
+                      <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => onDelete(d.id)} />
                     </td>
                   </tr>
                 ))}

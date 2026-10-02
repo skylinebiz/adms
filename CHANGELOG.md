@@ -12,6 +12,22 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.16.2] - 2026-10-02
+
+### Changed
+
+- **Icon-only row actions in every table.** The icon buttons Devices got in
+  2.16.1 are now a shared `IconButton` component used by every table's row
+  actions: Punch Records and Failed Webhooks (delivery log, retry now,
+  delete), Unregistered Devices (claim, delete), Raw Data Dump and Raw
+  Request Log (view, delete), Admin Users (reset password, delete) and
+  Companies (delete). Every action shows its name on hover/focus.
+- A disabled **Retry now** explains why in its tooltip ("no active
+  webhook"), and only its icon is greyed out, so the tooltip stays
+  readable.
+- **Devices: long company names are shortened.** Names over 15 characters
+  show as the first 15 plus "…", with the full name on hover.
+
 ## [2.16.1] - 2026-10-02
 
 ### Changed
