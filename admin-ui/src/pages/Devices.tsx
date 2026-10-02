@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { FileCode, Fingerprint, Pencil, SquareTerminal, Trash2, Webhook } from "lucide-react";
 import { api, ApiError, CompanyOption, Device } from "../api";
 import { useAuth } from "../context/AuthContext";
 import DeviceDrawer from "../components/DeviceDrawer";
@@ -10,6 +11,7 @@ import Pagination from "../components/Pagination";
 import { formatDateTime } from "../utils/dateFormat";
 
 const PAGE_SIZE = 25;
+const ICON_SIZE = 15;
 
 export default function Devices() {
   const { user } = useAuth();
@@ -127,26 +129,53 @@ export default function Devices() {
                       )}
                     </td>
                     <td className="actions-cell">
-                      <button className="btn btn-sm" onClick={() => setEditDeviceId(d.id)}>
-                        Edit
-                      </button>
-                      <button className="btn btn-sm" onClick={() => setWebhookDeviceId(d.id)}>
-                        Webhook
+                      <button
+                        className="btn btn-sm btn-icon"
+                        data-tooltip="Edit"
+                        aria-label="Edit"
+                        onClick={() => setEditDeviceId(d.id)}
+                      >
+                        <Pencil size={ICON_SIZE} />
                       </button>
                       <button
-                        className="btn btn-sm"
+                        className="btn btn-sm btn-icon"
+                        data-tooltip="Webhook"
+                        aria-label="Webhook"
+                        onClick={() => setWebhookDeviceId(d.id)}
+                      >
+                        <Webhook size={ICON_SIZE} />
+                      </button>
+                      <button
+                        className="btn btn-sm btn-icon"
+                        data-tooltip="Commands"
+                        aria-label="Commands"
                         onClick={() => setCommandsDevice({ id: d.id, serialNumber: d.serialNumber })}
                       >
-                        Commands
+                        <SquareTerminal size={ICON_SIZE} />
                       </button>
-                      <Link className="btn btn-sm" to={`/punch-records?deviceId=${d.id}`}>
-                        Punches
+                      <Link
+                        className="btn btn-sm btn-icon"
+                        data-tooltip="Punches"
+                        aria-label="Punches"
+                        to={`/punch-records?deviceId=${d.id}`}
+                      >
+                        <Fingerprint size={ICON_SIZE} />
                       </Link>
-                      <Link className="btn btn-sm" to={`/raw-data?deviceId=${d.id}`}>
-                        Raw Data
+                      <Link
+                        className="btn btn-sm btn-icon"
+                        data-tooltip="Raw Data"
+                        aria-label="Raw Data"
+                        to={`/raw-data?deviceId=${d.id}`}
+                      >
+                        <FileCode size={ICON_SIZE} />
                       </Link>
-                      <button className="btn btn-sm btn-danger" onClick={() => onDelete(d.id)}>
-                        Delete
+                      <button
+                        className="btn btn-sm btn-icon btn-danger"
+                        data-tooltip="Delete"
+                        aria-label="Delete"
+                        onClick={() => onDelete(d.id)}
+                      >
+                        <Trash2 size={ICON_SIZE} />
                       </button>
                     </td>
                   </tr>

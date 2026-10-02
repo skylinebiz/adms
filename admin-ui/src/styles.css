@@ -251,6 +251,34 @@ tr:hover td { background: var(--surface-2); }
    screen size, with no breakpoint or magic min-width needed. */
 .actions-cell { display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; }
 
+/* Square icon-only button. Its label lives in data-tooltip (shown on
+   hover/focus) and aria-label (for screen readers). The tooltip sits
+   above the button rather than below: .table-wrap's overflow-x: auto
+   also clips vertically, and the header row leaves room above the first
+   body row while nothing leaves room below the last one. */
+.btn-icon { position: relative; padding: 0; width: 28px; justify-content: center; }
+.btn-icon svg { flex-shrink: 0; }
+.btn-icon[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--text);
+  color: var(--surface);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  z-index: 10;
+}
+.btn-icon[data-tooltip]:hover::after,
+.btn-icon[data-tooltip]:focus-visible::after { opacity: 1; }
+
 /* ---------- Forms ---------- */
 
 input, select, textarea {

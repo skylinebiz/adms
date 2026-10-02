@@ -380,7 +380,8 @@ debugging firmware quirks:
   `USERINFO`, `FINGERTMP`, `FACE`, photos, or any other table name a
   firmware variant sends. Browsable per device, filterable by table name.
   Company admins only see their own company's devices; super admins can
-  view any device. Also reachable from Devices → a device's "Raw Data" link.
+  view any device. Also reachable from Devices → a device's Raw Data
+  (file-code) icon.
 - **Raw Request Log** (admin panel → super admin only) — an unconditional
   firehose of _every_ `/iclock/*` request, registered or not, any table,
   including heartbeats. This is the lowest-level "what is actually hitting

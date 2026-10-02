@@ -12,6 +12,16 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.16.1] - 2026-10-02
+
+### Changed
+
+- **Devices: icon-only row actions.** Edit, Webhook, Commands, Punches,
+  Raw Data and Delete are now compact icon buttons (from `lucide-react`)
+  instead of text buttons, so a row's actions take far less width. Each
+  icon's meaning shows as a small label on hover or keyboard focus, and
+  is exposed to screen readers via `aria-label`.
+
 ## [2.16.0] - 2026-09-28
 
 ### Changed
