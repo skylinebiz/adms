@@ -12,6 +12,18 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.17.0] - 2026-10-06
+
+### Added
+
+- **Settings → Public signups.** A super admin can now turn off public
+  self-signup. It's on by default, so existing installs behave as before.
+  While it's off, `POST /api/admin/auth/signup` returns 403, the signup
+  page shows a "Signups disabled" notice instead of the form, and the login
+  page hides its "Create a company" link. A super admin can still create
+  companies from the Companies page. The current state is exposed publicly
+  at `GET /api/admin/auth/signup-status`.
+
 ## [2.16.2] - 2026-10-02
 
 ### Changed

@@ -6,6 +6,7 @@ import { config } from "../config";
 import { signAdminToken } from "./jwt";
 import { requireAdminAuth } from "../middleware/requireAdminAuth";
 import { slugSchema } from "../utils/slug";
+import { getOrCreatePlatformSettings } from "../utils/retention";
 
 export const authRouter = Router();
 
@@ -83,7 +84,21 @@ const signupSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
+// Public - lets the login/signup screens hide or replace the signup form
+// when a super_admin has turned self-signup off (Settings -> Public signups).
+authRouter.get("/signup-status", async (_req, res) => {
+  const { signupsEnabled } = await getOrCreatePlatformSettings(prisma);
+  res.json({ signupsEnabled });
+});
+
 authRouter.post("/signup", async (req, res) => {
+  // Checked server-side, ahead of validation - hiding the form in the UI
+  // is only a convenience, not the enforcement.
+  const { signupsEnabled } = await getOrCreatePlatformSettings(prisma);
+  if (!signupsEnabled) {
+    res.status(403).json({ error: "Public signups are currently disabled" });
+    return;
+  }
   const parsed = signupSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });

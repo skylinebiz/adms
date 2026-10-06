@@ -1,7 +1,7 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { ApiError } from "../api";
+import { api, ApiError } from "../api";
 
 export default function Login() {
   const { user, loading, login } = useAuth();
@@ -10,6 +10,15 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Hidden until confirmed enabled, so the link doesn't flash and vanish.
+  const [signupsEnabled, setSignupsEnabled] = useState(false);
+
+  useEffect(() => {
+    api
+      .getSignupStatus()
+      .then(({ signupsEnabled }) => setSignupsEnabled(signupsEnabled))
+      .catch(() => setSignupsEnabled(false));
+  }, []);
 
   if (!loading && user) return <Navigate to="/" replace />;
 
@@ -43,9 +52,11 @@ export default function Login() {
         <button className="btn btn-primary" type="submit" disabled={submitting} style={{ width: "100%" }}>
           {submitting ? "Signing in…" : "Sign in"}
         </button>
-        <p className="muted" style={{ marginTop: 12, textAlign: "center" }}>
-          New here? <Link to="/signup">Create a company</Link>
-        </p>
+        {signupsEnabled && (
+          <p className="muted" style={{ marginTop: 12, textAlign: "center" }}>
+            New here? <Link to="/signup">Create a company</Link>
+          </p>
+        )}
       </form>
     </div>
   );

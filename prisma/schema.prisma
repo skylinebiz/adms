@@ -320,6 +320,11 @@ model PlatformSettings {
   // Formerly the WEBHOOK_TIMEOUT_MS env var, same reason as above.
   webhookTimeoutMs Int @default(8000)
 
+  // Whether the public /admin/signup flow (POST /api/admin/auth/signup)
+  // may create new companies. When false, only a super_admin can create
+  // companies and their admins, from the admin panel.
+  signupsEnabled Boolean @default(true)
+
   updatedAt DateTime @updatedAt
 
   @@map("platform_settings")

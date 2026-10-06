@@ -292,6 +292,11 @@ password. This creates the company and its first admin account
 in. The bootstrap super_admin above is only for the platform operator
 account — every company after that signs itself up.
 
+Self-signup is on by default. A super_admin can turn it off under **admin
+panel → Settings → Public signups**. While it's off, the signup endpoint
+returns 403 and the signup page shows a "signups disabled" notice. New
+companies can then only be created by a super_admin from the Companies page.
+
 ## Local development (without Docker)
 
 Requires Node 20+ and a Postgres instance (local or Dockerized just for the
@@ -734,7 +739,7 @@ See [`.env.example`](../.env.example) for the full list. Notable ones:
 | `DEVICE_OFFLINE_THRESHOLD_MS`                        | How long (ms) after last contact a device is still shown as ONLINE (default `300000` = 5 min) — see [Device online/offline status](#device-onlineoffline-status)                              |
 | `WORKER_POLL_INTERVAL_MS` / `WORKER_BATCH_SIZE`      | How often / how many rows the worker claims per tick                                                                                                                                          |
 
-Three settings are **not** env vars, even though they used to be (or you
+Four settings are **not** env vars, even though they used to be (or you
 might expect them to be) — they're platform-wide values stored in the
 database, changed from the admin panel (**Settings**, super admin only),
 not `.env`, and take effect immediately with no restart:
@@ -742,6 +747,7 @@ not `.env`, and take effect immediately with no restart:
 - **Data retention** (default 30 days) — see [Data retention](#data-retention) above.
 - **Webhook max attempts** (default 5) and **webhook timeout** (default
   8000 ms) — see [Webhook delivery](#webhook-delivery) above.
+- **Public signups** (default on) — see [Self-signup](#self-signup-companies) above.
 
 ### adms.adrk.in's configuration
 

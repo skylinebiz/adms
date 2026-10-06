@@ -30,6 +30,9 @@ const updateSchema = z
     // before a normal HTTP round-trip could ever complete; 2min ceiling
     // guards against one slow endpoint stalling a whole worker batch.
     webhookTimeoutMs: z.coerce.number().int().min(1000).max(120_000).optional(),
+    // Strict boolean, not coerced - z.coerce.boolean() would turn the
+    // string "false" into true.
+    signupsEnabled: z.boolean().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: "No settings provided" });
 

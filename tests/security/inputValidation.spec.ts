@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import bcrypt from "bcryptjs";
 import request from "supertest";
 import { prisma } from "../../src/db/client";
@@ -125,6 +125,64 @@ describe("signup cannot be used for privilege escalation via extra fields", () =
     expect(res.body.user.id).not.toBe("attacker-chosen-id");
     // cleanup this one-off company directly (outside the RUN_TAG-based helper slug shape)
     await prisma.company.delete({ where: { slug } }).catch(() => null);
+  });
+});
+
+// Lives in this file (not dataRetention.spec.ts with the other settings
+// tests) because it flips a global flag the signup test above depends on -
+// vitest runs files in parallel, but tests within one file sequentially.
+describe("public signups toggle (PlatformSettings.signupsEnabled)", () => {
+  async function setSignupsEnabled(signupsEnabled: boolean) {
+    await prisma.platformSettings.upsert({
+      where: { id: "singleton" },
+      update: { signupsEnabled },
+      create: { id: "singleton", signupsEnabled },
+    });
+  }
+
+  afterEach(async () => {
+    await setSignupsEnabled(true);
+  });
+
+  it("GET /auth/signup-status is public and reports the current flag", async () => {
+    await setSignupsEnabled(false);
+    const res = await request(app).get("/api/admin/auth/signup-status");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ signupsEnabled: false });
+  });
+
+  it("refuses signup with 403 and creates nothing while disabled", async () => {
+    await setSignupsEnabled(false);
+    const slug = `sigoff-${Date.now()}`;
+    const res = await request(app)
+      .post("/api/admin/auth/signup")
+      .send({ companyName: "Sig Off Co", slug, email: `${slug}@example.test`, password: "longenough1" });
+    expect(res.status).toBe(403);
+    expect(res.headers["set-cookie"]).toBeUndefined();
+    expect(await prisma.company.findUnique({ where: { slug } })).toBeNull();
+  });
+
+  it("super_admin can toggle it via PATCH /settings; company_admin cannot", async () => {
+    const off = await request(app)
+      .patch("/api/admin/settings")
+      .set("Cookie", superAdmin.cookie)
+      .send({ signupsEnabled: false });
+    expect(off.status).toBe(200);
+    expect(off.body.settings.signupsEnabled).toBe(false);
+
+    const forbidden = await request(app)
+      .patch("/api/admin/settings")
+      .set("Cookie", adminA.cookie)
+      .send({ signupsEnabled: true });
+    expect(forbidden.status).toBe(403);
+  });
+
+  it.each(["false", 0, null])("rejects a non-boolean signupsEnabled: %p", async (value) => {
+    const res = await request(app)
+      .patch("/api/admin/settings")
+      .set("Cookie", superAdmin.cookie)
+      .send({ signupsEnabled: value });
+    expect(res.status).toBe(400);
   });
 });
 

@@ -35,6 +35,9 @@ export default function Settings() {
   const [webhookSuccess, setWebhookSuccess] = useState(false);
   const [webhookSaving, setWebhookSaving] = useState(false);
 
+  const [signupsError, setSignupsError] = useState<string | null>(null);
+  const [signupsSaving, setSignupsSaving] = useState(false);
+
   // UI-only display preference - stored in this browser's localStorage
   // (see utils/dateFormat.ts), never sent to the server. Applies to every
   // date/time shown across the admin panel, not just this page.
@@ -114,6 +117,21 @@ export default function Settings() {
     }
   }
 
+  // Saves immediately on toggle (no separate Save button) - it's a single
+  // on/off switch, so there's nothing to batch up.
+  async function onToggleSignups(enabled: boolean) {
+    setSignupsError(null);
+    setSignupsSaving(true);
+    try {
+      const { settings } = await api.updateSettings({ signupsEnabled: enabled });
+      setSettings(settings);
+    } catch (err) {
+      setSignupsError(err instanceof ApiError ? err.message : "Failed to save settings");
+    } finally {
+      setSignupsSaving(false);
+    }
+  }
+
   return (
     <div>
       <h2>Settings</h2>
@@ -125,6 +143,25 @@ export default function Settings() {
         <div className="error-banner">{loadError}</div>
       ) : (
         <>
+          <div className="card" style={{ maxWidth: 520, marginBottom: 16 }}>
+            <h3 style={{ marginTop: 0 }}>Public signups</h3>
+            <p className="muted">
+              Whether anyone can create a new company from the public signup page. When turned off, the signup
+              page shows a "signups disabled" notice and new companies can only be created by a super admin from
+              the Companies page. Existing companies and their admins are not affected.
+            </p>
+            {signupsError && <div className="error-banner">{signupsError}</div>}
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={settings?.signupsEnabled ?? true}
+                disabled={signupsSaving}
+                onChange={(e) => onToggleSignups(e.target.checked)}
+              />
+              Allow public signups
+            </label>
+          </div>
+
           <div className="card" style={{ maxWidth: 520, marginBottom: 16 }}>
             <h3 style={{ marginTop: 0 }}>Data retention</h3>
             <p className="muted">

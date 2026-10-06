@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api, ApiError } from "../api";
@@ -14,6 +14,16 @@ export default function Signup() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // null while loading. A failed status check falls back to showing the
+  // form - the server still refuses the actual signup if it's disabled.
+  const [signupsEnabled, setSignupsEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    api
+      .getSignupStatus()
+      .then(({ signupsEnabled }) => setSignupsEnabled(signupsEnabled))
+      .catch(() => setSignupsEnabled(true));
+  }, []);
 
   if (!loading && user) return <Navigate to="/" replace />;
 
@@ -35,6 +45,33 @@ export default function Signup() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (signupsEnabled === null) {
+    return (
+      <div className="login-page">
+        <div className="login-box">
+          <p className="muted">Loading…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!signupsEnabled) {
+    return (
+      <div className="login-page">
+        <div className="login-box">
+          <h1>Signups disabled</h1>
+          <p className="muted">
+            New company signups are currently turned off. Contact the platform administrator if you need an
+            account.
+          </p>
+          <p className="muted" style={{ marginTop: 12, textAlign: "center" }}>
+            Already have an account? <Link to="/login">Sign in</Link>
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (

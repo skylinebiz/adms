@@ -145,6 +145,7 @@ export interface PlatformSettings {
   dataRetentionDays: number;
   webhookMaxAttempts: number;
   webhookTimeoutMs: number;
+  signupsEnabled: boolean;
   updatedAt: string;
 }
 
@@ -213,6 +214,8 @@ export interface WebhookDelivery {
 
 export const api = {
   login: (email: string, password: string) => post<{ user: AdminUserSummary }>("/auth/login", { email, password }),
+  // Public - no session required.
+  getSignupStatus: () => get<{ signupsEnabled: boolean }>("/auth/signup-status"),
   signup: (data: { companyName: string; slug: string; email: string; password: string }) =>
     post<{ user: AdminUserSummary }>("/auth/signup", data),
   logout: () => post<{ ok: true }>("/auth/logout"),
@@ -344,6 +347,11 @@ export const api = {
 
   getSettings: () => get<{ settings: PlatformSettings }>("/settings"),
   updateSettings: (
-    data: Partial<{ dataRetentionDays: number; webhookMaxAttempts: number; webhookTimeoutMs: number }>
+    data: Partial<{
+      dataRetentionDays: number;
+      webhookMaxAttempts: number;
+      webhookTimeoutMs: number;
+      signupsEnabled: boolean;
+    }>
   ) => patch<{ settings: PlatformSettings }>("/settings", data),
 };

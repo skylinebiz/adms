@@ -5,7 +5,7 @@ import { app } from "../helpers/securityTestApp";
 import { config } from "../../src/config";
 
 // Every /api/admin/* route except the handful that are deliberately public
-// (login, signup, logout, version) must reject a request before it ever
+// (login, signup, signup-status, logout, version) must reject a request before it ever
 // touches a handler's business logic, for four distinct ways of not being a
 // legitimate session:
 //   - no cookie at all
