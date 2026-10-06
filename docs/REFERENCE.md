@@ -137,9 +137,11 @@ device. There's exactly one way to do that in the admin panel:
    attributed to your company, with its secret captured.
 3. Pick its timezone and **Claim** it (the ⊕ icon in its row) — it moves to
    **Devices**, with nothing to reconfigure on the device afterward.
+4. Wait 10–15 seconds, then restart the device once so it picks up its new
+   settings (clock and timezone).
 
 The Devices page's **+ Add device** button just takes you to
-Unregistered Devices — there's no manual "type in a serial number" form. `POST /api/admin/devices` still exists for scripted use.
+Unregistered Devices, where these same steps are shown at the top of the page — there's no manual "type in a serial number" form. `POST /api/admin/devices` still exists for scripted use.
 
 ## Company + device URLs
 

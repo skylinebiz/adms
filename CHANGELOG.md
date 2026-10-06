@@ -12,6 +12,23 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.17.1] - 2026-10-06
+
+### Changed
+
+- **Unregistered Devices** now has a single, compact **Add a device** guide
+  in place of the separate "How to add a device" and "Connect a device"
+  cards: connect the device (with the three server addresses to try in
+  order), refresh to check it's connected, claim it, then restart the
+  device 10–15 seconds after claiming. The pending-device table has its own
+  header with a **Refresh** button, and "Delete selected" only appears once
+  rows are selected.
+- The **Devices** page no longer shows connection instructions; its
+  **+ Add device** button leads to the guide on Unregistered Devices.
+- The admin panel now sets a 14px base font size and consistent line
+  height, so body text no longer falls back to the browser's 16px next to
+  the smaller text around it.
+
 ## [2.17.0] - 2026-10-06
 
 ### Added

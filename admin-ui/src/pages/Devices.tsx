@@ -7,7 +7,6 @@ import DeviceDrawer from "../components/DeviceDrawer";
 import IconButton from "../components/IconButton";
 import WebhookDrawer from "../components/WebhookDrawer";
 import DeviceCommandsDrawer from "../components/DeviceCommandsDrawer";
-import ConnectDeviceCard from "../components/ConnectDeviceCard";
 import Pagination from "../components/Pagination";
 import { formatDateTime } from "../utils/dateFormat";
 
@@ -82,17 +81,6 @@ export default function Devices() {
       </div>
       {error && <div className="error-banner">{error}</div>}
 
-      <ConnectDeviceCard
-        companies={companies}
-        isSuperAdmin={user?.role === "SUPER_ADMIN"}
-        trailingNote={
-          <>
-            Pick any secret string. Once the device pings, it appears under <strong>Unregistered Devices</strong> with
-            that secret already captured — claim it there and it shows up in this list.
-          </>
-        }
-      />
-
       <div className="card">
         {loading ? (
           <p className="muted">Loading…</p>
@@ -162,8 +150,7 @@ export default function Devices() {
                 {devices.length === 0 && (
                   <tr>
                     <td colSpan={7} className="muted">
-                      No devices yet. Point a device at the URL above, then claim it from{" "}
-                      <Link to="/unregistered-devices">Unregistered Devices</Link>.
+                      No devices yet. Click <Link to="/unregistered-devices">+ Add device</Link> to connect one.
                     </td>
                   </tr>
                 )}

@@ -64,6 +64,10 @@ html, body { overflow-x: hidden; }
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* Without an explicit base size, body copy fell back to the browser's 16px
+     and sat awkwardly next to the 12-13px used everywhere else. */
+  font-size: 14px;
+  line-height: 1.5;
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -162,7 +166,8 @@ a:hover { text-decoration: underline; }
    content that actually benefits from more room, like a wide table,
    isn't artificially starved of it by a blanket cap here. */
 .main { flex: 1; min-width: 0; padding: 28px 32px; }
-.main h2 { margin-top: 0; }
+.main h2 { margin-top: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+.main h3 { font-size: 15px; font-weight: 600; }
 
 @media (max-width: 900px) {
   .topbar { display: flex; }
@@ -191,6 +196,38 @@ a:hover { text-decoration: underline; }
   margin-bottom: 20px;
 }
 .card h3, .card h4 { margin-top: 0; }
+
+/* Title + small actions on one line at the top of a card. */
+.card-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.card-header h3 { margin: 0; }
+.card-header-actions { display: flex; gap: 8px; align-items: center; }
+.card-header-actions .btn { gap: 6px; }
+
+td.empty-cell { padding: 20px 10px; text-align: center; white-space: normal; }
+
+/* ---------- Add-device guide (Unregistered Devices) ---------- */
+
+.guide h3 { margin-bottom: 12px; }
+.guide p { margin: 0 0 4px; color: var(--text-muted); font-size: 13px; }
+.guide .steps { list-style: none; counter-reset: step; margin: 0; padding: 0; }
+.guide .steps > li { counter-increment: step; position: relative; padding: 0 0 12px 32px; }
+.guide .steps > li:last-child { padding-bottom: 0; }
+.guide .steps > li::before {
+  content: counter(step);
+  position: absolute; left: 0; top: 0;
+  width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent-tint); color: var(--accent);
+  font-size: 12px; font-weight: 600;
+}
+.guide .step-title { font-weight: 600; font-size: 14px; }
+.guide .guide-company { max-width: 280px; margin: 4px 0 8px; }
+.guide .address-options { margin: 4px 0 6px; padding-left: 20px; font-size: 13px; }
+.guide .address-options li { margin-bottom: 2px; }
+.guide .option-note { color: var(--text-muted); font-size: 12px; }
+.guide .placeholder { color: var(--accent); }
+.guide p.hint { font-size: 12px; }
+.guide .inline-icon { vertical-align: -2px; color: var(--accent); }
 
 /* ---------- Tables ---------- */
 

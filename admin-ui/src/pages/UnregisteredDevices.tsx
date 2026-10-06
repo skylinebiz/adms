@@ -3,10 +3,10 @@ import { api, ApiError, CompanyOption } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useSelection } from "../hooks/useSelection";
 import Pagination from "../components/Pagination";
-import ConnectDeviceCard from "../components/ConnectDeviceCard";
+import AddDeviceGuide from "../components/AddDeviceGuide";
 import { DEFAULT_TIMEZONE, TIMEZONE_OPTIONS } from "../utils/timezoneOptions";
 import { formatDateTime } from "../utils/dateFormat";
-import { CirclePlus, Trash2 } from "lucide-react";
+import { CirclePlus, RefreshCw, Trash2 } from "lucide-react";
 import IconButton from "../components/IconButton";
 
 const PAGE_SIZE = 25;
@@ -109,49 +109,25 @@ export default function UnregisteredDevices() {
     <div>
       <h2>Unregistered Devices</h2>
       {/* The one supported way to add a device (v2.16.0 dropped the manual
-          "Register device" form from the Devices page) - spelled out as
-          explicit steps so nobody goes looking for another path. */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <h3 style={{ marginTop: 0 }}>How to add a device</h3>
-        <ol style={{ margin: 0, paddingLeft: 20 }}>
-          <li>
-            On the device, set the Cloud Server address to one of the URLs in <strong>Connect a device</strong> below.
-          </li>
-          <li>
-            Wait for its first ping — it appears in the table at the bottom of this page with its secret already
-            captured (refresh if it doesn't show up right away).
-          </li>
-          <li>
-            Pick the device's timezone and click <strong>Claim</strong> (
-            <CirclePlus size={13} style={{ verticalAlign: "-2px" }} aria-hidden />
-            ). It then moves to <strong>Devices</strong>,
-            with nothing to reconfigure on the device itself.
-          </li>
-        </ol>
-        <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
-          The timezone is required — it's used for accurate punch times and to tell the device its own clock/timezone.
-          If a row here is just noise, delete it instead.
-        </p>
-      </div>
-
-      <ConnectDeviceCard
-        companies={companies}
-        isSuperAdmin={isSuperAdmin}
-        trailingNote="Pick any secret string — it's captured automatically on the device's first ping and becomes its secret when you claim it."
-      />
+          "Register device" form) - the Devices page's "+ Add device" lands here. */}
+      <AddDeviceGuide companies={companies} isSuperAdmin={isSuperAdmin} />
 
       {error && <div className="error-banner">{error}</div>}
 
-      {isSuperAdmin && (
-        <div className="toolbar">
-          <div />
-          <button className="btn btn-danger" disabled={selected.size === 0} onClick={deleteSelected}>
-            Delete selected ({selected.size})
-          </button>
-        </div>
-      )}
-
       <div className="card">
+        <div className="card-header">
+          <h3>Waiting to be claimed</h3>
+          <div className="card-header-actions">
+            {isSuperAdmin && selected.size > 0 && (
+              <button className="btn btn-sm btn-danger" onClick={deleteSelected}>
+                Delete selected ({selected.size})
+              </button>
+            )}
+            <button className="btn btn-sm" onClick={load} disabled={loading}>
+              <RefreshCw size={13} aria-hidden /> Refresh
+            </button>
+          </div>
+        </div>
         {loading ? (
           <p className="muted">Loading…</p>
         ) : (
@@ -265,8 +241,8 @@ export default function UnregisteredDevices() {
                   ))}
                   {pings.length === 0 && (
                     <tr>
-                      <td colSpan={emptyStateColSpan} className="muted">
-                        Waiting for a device to ping… Configure it using the URL above, then refresh this page.
+                      <td colSpan={emptyStateColSpan} className="muted empty-cell">
+                        No devices yet — once one pings, it shows up here.
                       </td>
                     </tr>
                   )}
