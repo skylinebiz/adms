@@ -88,11 +88,12 @@ function buildTimezoneOptions(): TimezoneOption[] {
 
 export const TIMEZONE_OPTIONS = buildTimezoneOptions();
 
-// Sensible default for the picker - IST, since that's this deployment's
-// primary operating timezone. Still just a starting point; always
-// changeable before saving/claiming.
+// Sensible default for the picker - the admin's own browser timezone if it's
+// a real option, else IST (this deployment's primary operating timezone).
+// Still just a starting point; always changeable before saving/claiming.
 //
-// Resolved against the actual option list rather than hardcoded: IANA
+// The IST fallback is resolved against the actual option list rather than
+// hardcoded: IANA
 // treats "Asia/Kolkata" as an alias of the canonical "Asia/Calcutta", and
 // depending on the ICU version bundled with the browser/Node runtime,
 // Intl.supportedValuesOf("timeZone") may only return one of the two - a
@@ -100,5 +101,16 @@ export const TIMEZONE_OPTIONS = buildTimezoneOptions();
 // fall back to the browser's default (the first option in the list,
 // nowhere near IST) instead of erroring, so this always resolves to
 // whichever spelling is actually present.
-export const DEFAULT_TIMEZONE =
+const FALLBACK_DEFAULT_TIMEZONE =
   TIMEZONE_OPTIONS.find((opt) => opt.tz === "Asia/Kolkata" || opt.tz === "Asia/Calcutta")?.tz ?? "UTC";
+
+function browserTimeZone(): string | null {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return TIMEZONE_OPTIONS.some((opt) => opt.tz === tz) ? tz : null;
+  } catch {
+    return null;
+  }
+}
+
+export const DEFAULT_TIMEZONE = browserTimeZone() ?? FALLBACK_DEFAULT_TIMEZONE;
