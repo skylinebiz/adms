@@ -12,6 +12,17 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.17.3] - 2026-10-07
+
+### Changed
+
+- A device's **label** now defaults to its serial number when it's added
+  (directly or by claiming an unregistered device) without one, and
+  clearing the label in the edit drawer falls back to the serial number
+  instead of leaving it blank.
+- Migration `20261007120000_default_device_label_to_serial` backfills
+  existing devices with a null or blank label to their serial number.
+
 ## [2.17.2] - 2026-10-07
 
 ### Changed

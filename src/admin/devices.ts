@@ -249,7 +249,7 @@ devicesRouter.post("/claim", async (req, res) => {
         data: {
           serialNumber: parsed.data.serialNumber,
           companyId: parsed.data.companyId,
-          label: parsed.data.label,
+          label: parsed.data.label?.trim() || parsed.data.serialNumber,
           deviceSecret,
           timezone: parsed.data.timezone,
         },
@@ -367,6 +367,8 @@ devicesRouter.post("/", async (req, res) => {
     .create({
       data: {
         ...parsed.data,
+        // Default to the SN so every device has a visible, editable label.
+        label: parsed.data.label?.trim() || parsed.data.serialNumber,
         webhookHeaders: toJsonInput(parsed.data.webhookHeaders),
         webhookBodyTemplate: toJsonInput(parsed.data.webhookBodyTemplate),
         webhookSecret: parsed.data.webhookUrl ? crypto.randomBytes(24).toString("hex") : null,
@@ -435,6 +437,8 @@ devicesRouter.patch("/:id", async (req, res) => {
 
   const { regenerateSecret, ...rest } = parsed.data;
   const data: Record<string, unknown> = { ...rest };
+  // Clearing the label falls back to the SN rather than leaving it blank.
+  if ("label" in rest) data.label = rest.label?.trim() || existing.serialNumber;
   if ("webhookHeaders" in rest) data.webhookHeaders = toJsonInput(rest.webhookHeaders);
   if ("webhookBodyTemplate" in rest) data.webhookBodyTemplate = toJsonInput(rest.webhookBodyTemplate);
   if (regenerateSecret || (rest.webhookUrl && !existing.webhookSecret)) {
