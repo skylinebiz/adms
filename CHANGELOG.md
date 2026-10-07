@@ -12,6 +12,20 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.17.2] - 2026-10-07
+
+### Changed
+
+- **Settings** is now a single card with one **Save** button instead of
+  four separate cards with their own save actions. Each section (Public
+  signups, Data retention, Webhook delivery, Date & time display) shares
+  the same title / description / fields layout, with shorter descriptions.
+  Save is disabled until something changes, and the footer shows "Last
+  changed", "unsaved changes", or "Settings saved." accordingly.
+- The **Allow public signups** checkbox and the date/time format pickers no
+  longer apply instantly - they're saved with everything else. The date/time
+  preview reflects the picked formats before saving.
+
 ## [2.17.1] - 2026-10-06
 
 ### Changed

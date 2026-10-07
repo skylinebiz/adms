@@ -138,13 +138,17 @@ export interface FormatOptions {
 }
 
 // Full date + time, per the admin's saved format preferences (defaults to
-// YYYY-MM-DD HH:MM:SS, 24-hour, if none set).
-export function formatDateTime(input: string | Date, options: FormatOptions = {}): string {
+// YYYY-MM-DD HH:MM:SS, 24-hour, if none set). The format overrides let the
+// Settings page preview a choice before it's saved.
+export function formatDateTime(
+  input: string | Date,
+  options: FormatOptions & { dateFormat?: DateFormatId; timeFormat?: TimeFormatId } = {}
+): string {
   const date = typeof input === "string" ? new Date(input) : input;
   const parts = getParts(date, options.utc ?? false);
-  return `${formatDatePartWith(parts, getDateFormatPreference())} ${formatTimePartWith(
+  return `${formatDatePartWith(parts, options.dateFormat ?? getDateFormatPreference())} ${formatTimePartWith(
     parts,
-    getTimeFormatPreference()
+    options.timeFormat ?? getTimeFormatPreference()
   )}`;
 }
 

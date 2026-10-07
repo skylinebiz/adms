@@ -426,3 +426,28 @@ label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom
 code.mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; background: var(--neutral-tint); padding: 1px 5px; border-radius: 4px; }
 
 .pagination { display: flex; gap: 8px; align-items: center; margin-top: 12px; font-size: 13px; flex-wrap: wrap; }
+
+/* ---------- Settings page ---------- */
+
+.settings-card { max-width: 640px; padding: 0; }
+.settings-section { padding: 20px; border-bottom: 1px solid var(--border); }
+.settings-section-head { margin-bottom: 14px; }
+.settings-section-head h3 { margin: 0 0 4px; font-size: 15px; }
+.settings-section-head p { margin: 0; line-height: 1.5; }
+.settings-section .field { margin-bottom: 0; }
+.settings-preview { margin: 10px 0 0; }
+.settings-card .error-banner { margin: 16px 20px 0; }
+.settings-footer {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 14px 20px; flex-wrap: wrap;
+}
+.check-row {
+  display: inline-flex; align-items: center; gap: 8px; margin: 0;
+  font-size: 13px; color: var(--text); cursor: pointer;
+}
+.success-text { color: var(--success-text); font-weight: 500; }
+
+@media (max-width: 600px) {
+  .settings-section, .settings-footer { padding-left: 16px; padding-right: 16px; }
+  .settings-card .error-banner { margin-left: 16px; margin-right: 16px; }
+}
