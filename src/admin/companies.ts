@@ -1,8 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../db/client";
 import { requireSuperAdmin } from "../middleware/requireAdminAuth";
-import { OPTIONS_LIMIT, paginationQuerySchema } from "../utils/pagination";
+import { OPTIONS_LIMIT } from "../utils/pagination";
+import { buildOrderBy, buildSearch, dataTableQuerySchema, SortColumns } from "../utils/datatable";
 import { slugSchema } from "../utils/slug";
 
 export const companiesRouter = Router();
@@ -28,6 +30,17 @@ companiesRouter.get("/options", async (req, res) => {
   res.json({ companies });
 });
 
+// Sortable columns - each backed by an index (name/createdAt on companies,
+// slug's unique index, and the companyId FK indexes on devices/admin_users
+// for the relation counts).
+const sortColumns = {
+  name: (dir) => ({ name: dir }),
+  slug: (dir) => ({ slug: dir }),
+  devices: (dir) => ({ devices: { _count: dir } }),
+  adminUsers: (dir) => ({ adminUsers: { _count: dir } }),
+  createdAt: (dir) => ({ createdAt: dir }),
+} satisfies SortColumns<Prisma.CompanyOrderByWithRelationInput>;
+
 // company_admin only ever sees their own company; super_admin sees all, paginated.
 companiesRouter.get("/", async (req, res) => {
   if (req.adminUser!.role !== "SUPER_ADMIN") {
@@ -42,21 +55,26 @@ companiesRouter.get("/", async (req, res) => {
     return;
   }
 
-  const parsedQuery = paginationQuerySchema.safeParse(req.query);
+  const parsedQuery = dataTableQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
     res.status(400).json({ error: "Invalid query", details: parsedQuery.error.flatten() });
     return;
   }
-  const { page, pageSize } = parsedQuery.data;
+  const { page, pageSize, sortBy, sortDir, search } = parsedQuery.data;
+
+  const where: Prisma.CompanyWhereInput = {
+    ...buildSearch<Prisma.CompanyWhereInput>(search, [(t) => ({ name: t }), (t) => ({ slug: t })]),
+  };
 
   const [companies, total] = await Promise.all([
     prisma.company.findMany({
-      orderBy: { createdAt: "desc" },
+      where,
+      orderBy: buildOrderBy<Prisma.CompanyOrderByWithRelationInput>(sortBy, sortDir, sortColumns, [{ createdAt: "desc" }]),
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: { _count: { select: { devices: true, adminUsers: true } } },
     }),
-    prisma.company.count(),
+    prisma.company.count({ where }),
   ]);
   res.json({ companies, total, page, pageSize });
 });

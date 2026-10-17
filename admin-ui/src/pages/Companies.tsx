@@ -1,48 +1,37 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import { api, ApiError, Company } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { slugify } from "../utils/slug";
-import Pagination from "../components/Pagination";
+import DataTable, { Column } from "../components/DataTable";
+import { useDataTable } from "../hooks/useDataTable";
 import { formatDateTime } from "../utils/dateFormat";
 import { Trash2 } from "lucide-react";
 import IconButton from "../components/IconButton";
 
-const PAGE_SIZE = 25;
-
 export default function Companies() {
   const { user } = useAuth();
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const isSuperAdmin = user?.role === "SUPER_ADMIN";
+  const [actionError, setError] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const [newSlug, setNewSlug] = useState("");
   const [slugTouched, setSlugTouched] = useState(false);
   const [creating, setCreating] = useState(false);
 
+  const table = useDataTable<Company>({
+    fetcher: async (q) => {
+      const r = await api.listCompanies(q);
+      return { rows: r.companies, total: r.total };
+    },
+    defaultSort: { sortBy: "createdAt", sortDir: "desc" },
+    errorMessage: "Failed to load companies",
+  });
+  const error = actionError ?? table.error;
+  const load = table.reload;
+
   function onNewNameChange(value: string) {
     setNewName(value);
     if (!slugTouched) setNewSlug(slugify(value));
   }
-
-  async function load() {
-    setLoading(true);
-    try {
-      const result = await api.listCompanies({ page, pageSize: PAGE_SIZE });
-      setCompanies(result.companies);
-      setTotal(result.total);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load companies");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();
@@ -53,7 +42,7 @@ export default function Companies() {
       setNewName("");
       setNewSlug("");
       setSlugTouched(false);
-      setPage(1);
+      table.setPage(1);
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to create company");
@@ -72,12 +61,32 @@ export default function Companies() {
     }
   }
 
+  const columns: Column<Company>[] = [
+    { key: "name", header: "Name", sortable: true, render: (c) => c.name },
+    { key: "slug", header: "Slug", sortable: true, render: (c) => <code className="mono">{c.slug}</code> },
+    { key: "devices", header: "Devices", sortable: true, render: (c) => c._count?.devices ?? "-" },
+    { key: "adminUsers", header: "Admin users", sortable: true, render: (c) => c._count?.adminUsers ?? "-" },
+    { key: "createdAt", header: "Created", sortable: true, render: (c) => formatDateTime(c.createdAt) },
+    ...(isSuperAdmin
+      ? [
+          {
+            key: "actions",
+            header: "",
+            cellClassName: "actions-cell",
+            render: (c: Company) => (
+              <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => onDelete(c.id)} />
+            ),
+          },
+        ]
+      : []),
+  ];
+
   return (
     <div>
       <h2>Companies</h2>
       {error && <div className="error-banner">{error}</div>}
 
-      {user?.role === "SUPER_ADMIN" && (
+      {isSuperAdmin && (
         <div className="card">
           <h3>New company</h3>
           <form onSubmit={onCreate} className="form-row" style={{ alignItems: "flex-end" }}>
@@ -107,54 +116,24 @@ export default function Companies() {
       )}
 
       <div className="card">
-        {loading ? (
-          <p className="muted">Loading…</p>
-        ) : (
-          <>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Slug</th>
-                    <th>Devices</th>
-                    <th>Admin users</th>
-                    <th>Created</th>
-                    {user?.role === "SUPER_ADMIN" && <th></th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {companies.map((c) => (
-                    <tr key={c.id}>
-                      <td>{c.name}</td>
-                      <td>
-                        <code className="mono">{c.slug}</code>
-                      </td>
-                      <td>{c._count?.devices ?? "-"}</td>
-                      <td>{c._count?.adminUsers ?? "-"}</td>
-                      <td>{formatDateTime(c.createdAt)}</td>
-                      {user?.role === "SUPER_ADMIN" && (
-                        <td className="actions-cell">
-                          <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => onDelete(c.id)} />
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                  {companies.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="muted">
-                        No companies yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            {user?.role === "SUPER_ADMIN" && (
-              <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
-            )}
-          </>
-        )}
+        <DataTable
+          columns={columns}
+          rows={table.rows}
+          rowKey={(c) => c.id}
+          loading={table.loading}
+          sort={table.sort}
+          onSort={table.toggleSort}
+          page={table.page}
+          pageSize={table.pageSize}
+          total={table.total}
+          onPageChange={table.setPage}
+          onPageSizeChange={table.setPageSize}
+          emptyMessage="No companies yet."
+          searchValue={isSuperAdmin ? table.searchInput : undefined}
+          onSearchChange={isSuperAdmin ? table.setSearchInput : undefined}
+          searchPlaceholder="Search name or slug…"
+          hidePagination={!isSuperAdmin}
+        />
       </div>
     </div>
   );

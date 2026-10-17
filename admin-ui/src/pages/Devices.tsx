@@ -7,10 +7,10 @@ import DeviceDrawer from "../components/DeviceDrawer";
 import IconButton from "../components/IconButton";
 import WebhookDrawer from "../components/WebhookDrawer";
 import DeviceCommandsDrawer from "../components/DeviceCommandsDrawer";
-import Pagination from "../components/Pagination";
+import DataTable, { Column } from "../components/DataTable";
+import { useDataTable } from "../hooks/useDataTable";
 import { formatDateTime } from "../utils/dateFormat";
 
-const PAGE_SIZE = 25;
 // Longer company names are cut to this many characters plus "…" so the
 // column stays narrow; the full name shows on hover.
 const COMPANY_NAME_MAX = 15;
@@ -27,37 +27,34 @@ function CompanyName({ name }: { name?: string }) {
 
 export default function Devices() {
   const { user } = useAuth();
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
+  const isSuperAdmin = user?.role === "SUPER_ADMIN";
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("");
+  const [actionError, setError] = useState<string | null>(null);
   const [editDeviceId, setEditDeviceId] = useState<string | null>(null);
   const [webhookDeviceId, setWebhookDeviceId] = useState<string | null>(null);
   const [commandsDevice, setCommandsDevice] = useState<{ id: string; serialNumber: string } | null>(null);
 
-  async function load() {
-    setLoading(true);
-    try {
-      const [d, c] = await Promise.all([
-        api.listDevices({ page, pageSize: PAGE_SIZE }),
-        api.listCompanyOptions(),
-      ]);
-      setDevices(d.devices);
-      setTotal(d.total);
-      setCompanies(c.companies);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load devices");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const table = useDataTable<Device>({
+    fetcher: async (q) => {
+      const r = await api.listDevices({
+        ...q,
+        status: statusFilter || undefined,
+        companyId: companyFilter || undefined,
+      });
+      return { rows: r.devices, total: r.total };
+    },
+    defaultSort: { sortBy: "createdAt", sortDir: "desc" },
+    deps: [statusFilter, companyFilter],
+    errorMessage: "Failed to load devices",
+  });
+  const error = actionError ?? table.error;
+  const load = table.reload;
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+    api.listCompanyOptions().then((c) => setCompanies(c.companies));
+  }, []);
 
   async function onDelete(id: string) {
     if (!confirm("Delete this device and all its punch records? This cannot be undone.")) return;
@@ -68,6 +65,76 @@ export default function Devices() {
       setError(err instanceof ApiError ? err.message : "Failed to delete device");
     }
   }
+
+  const columns: Column<Device>[] = [
+    {
+      key: "serialNumber",
+      header: "Serial number",
+      sortable: true,
+      render: (d) => <code className="mono">{d.serialNumber}</code>,
+    },
+    { key: "label", header: "Label", sortable: true, render: (d) => d.label ?? <span className="muted">—</span> },
+    ...(isSuperAdmin
+      ? [
+          {
+            key: "company",
+            header: "Company",
+            sortable: true,
+            render: (d: Device) => <CompanyName name={d.company?.name} />,
+          },
+        ]
+      : []),
+    {
+      key: "status",
+      header: "Status",
+      sortable: true,
+      render: (d) => <span className={`badge badge-${d.status.toLowerCase()}`}>{d.status}</span>,
+    },
+    {
+      key: "lastSeenAt",
+      header: "Last seen",
+      sortable: true,
+      render: (d) => (d.lastSeenAt ? formatDateTime(d.lastSeenAt) : <span className="muted">never</span>),
+    },
+    {
+      key: "webhook",
+      header: "Webhook",
+      // Configured/enabled indicator only - never the URL itself, even masked,
+      // to keep this list from doubling as a place webhook endpoints leak into view.
+      render: (d) =>
+        d.webhookUrlMasked ? (
+          <span
+            className={`badge ${d.webhookEnabled ? "badge-delivered" : "badge-offline"}`}
+            title={d.webhookEnabled ? "Webhook configured and enabled" : "Webhook configured but disabled"}
+          >
+            {d.webhookEnabled ? "● Enabled" : "○ Disabled"}
+          </span>
+        ) : (
+          <span className="muted" title="No webhook configured for this device">
+            Not configured
+          </span>
+        ),
+    },
+    {
+      key: "actions",
+      header: "",
+      cellClassName: "actions-cell",
+      render: (d) => (
+        <>
+          <IconButton icon={Pencil} label="Edit" onClick={() => setEditDeviceId(d.id)} />
+          <IconButton icon={Webhook} label="Webhook" onClick={() => setWebhookDeviceId(d.id)} />
+          <IconButton
+            icon={SquareTerminal}
+            label="Commands"
+            onClick={() => setCommandsDevice({ id: d.id, serialNumber: d.serialNumber })}
+          />
+          <IconButton icon={Fingerprint} label="Punches" to={`/punch-records?deviceId=${d.id}`} />
+          <IconButton icon={FileCode} label="Raw Data" to={`/raw-data?deviceId=${d.id}`} />
+          <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => onDelete(d.id)} />
+        </>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -82,84 +149,57 @@ export default function Devices() {
       {error && <div className="error-banner">{error}</div>}
 
       <div className="card">
-        {loading ? (
-          <p className="muted">Loading…</p>
-        ) : (
-          <>
-            <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Serial number</th>
-                  <th>Label</th>
-                  {user?.role === "SUPER_ADMIN" && <th>Company</th>}
-                  <th>Status</th>
-                  <th>Last seen</th>
-                  <th>Webhook</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {devices.map((d) => (
-                  <tr key={d.id}>
-                    <td>
-                      <code className="mono">{d.serialNumber}</code>
-                    </td>
-                    <td>{d.label ?? <span className="muted">—</span>}</td>
-                    {user?.role === "SUPER_ADMIN" && (
-                      <td>
-                        <CompanyName name={d.company?.name} />
-                      </td>
-                    )}
-                    <td>
-                      <span className={`badge badge-${d.status.toLowerCase()}`}>{d.status}</span>
-                    </td>
-                    <td>
-                      {d.lastSeenAt ? formatDateTime(d.lastSeenAt) : <span className="muted">never</span>}
-                    </td>
-                    <td>
-                      {/* Configured/enabled indicator only - never the URL itself, even masked,
-                          to keep this list from doubling as a place webhook endpoints leak into view. */}
-                      {d.webhookUrlMasked ? (
-                        <span
-                          className={`badge ${d.webhookEnabled ? "badge-delivered" : "badge-offline"}`}
-                          title={d.webhookEnabled ? "Webhook configured and enabled" : "Webhook configured but disabled"}
-                        >
-                          {d.webhookEnabled ? "● Enabled" : "○ Disabled"}
-                        </span>
-                      ) : (
-                        <span className="muted" title="No webhook configured for this device">
-                          Not configured
-                        </span>
-                      )}
-                    </td>
-                    <td className="actions-cell">
-                      <IconButton icon={Pencil} label="Edit" onClick={() => setEditDeviceId(d.id)} />
-                      <IconButton icon={Webhook} label="Webhook" onClick={() => setWebhookDeviceId(d.id)} />
-                      <IconButton
-                        icon={SquareTerminal}
-                        label="Commands"
-                        onClick={() => setCommandsDevice({ id: d.id, serialNumber: d.serialNumber })}
-                      />
-                      <IconButton icon={Fingerprint} label="Punches" to={`/punch-records?deviceId=${d.id}`} />
-                      <IconButton icon={FileCode} label="Raw Data" to={`/raw-data?deviceId=${d.id}`} />
-                      <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => onDelete(d.id)} />
-                    </td>
-                  </tr>
-                ))}
-                {devices.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="muted">
-                      No devices yet. Click <Link to="/unregistered-devices">+ Add device</Link> to connect one.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            </div>
-            <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
-          </>
-        )}
+        <DataTable
+          columns={columns}
+          rows={table.rows}
+          rowKey={(d) => d.id}
+          loading={table.loading}
+          sort={table.sort}
+          onSort={table.toggleSort}
+          page={table.page}
+          pageSize={table.pageSize}
+          total={table.total}
+          onPageChange={table.setPage}
+          onPageSizeChange={table.setPageSize}
+          emptyMessage={
+            <>
+              No devices found. Click <Link to="/unregistered-devices">+ Add device</Link> to connect one.
+            </>
+          }
+          searchValue={table.searchInput}
+          onSearchChange={table.setSearchInput}
+          searchPlaceholder="Search serial, label or company…"
+          toolbar={
+            <>
+              <select
+                className="datatable-filter"
+                aria-label="Filter by status"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="">All statuses</option>
+                <option value="ONLINE">Online</option>
+                <option value="OFFLINE">Offline</option>
+                <option value="UNKNOWN">Unknown</option>
+              </select>
+              {isSuperAdmin && (
+                <select
+                  className="datatable-filter"
+                  aria-label="Filter by company"
+                  value={companyFilter}
+                  onChange={(e) => setCompanyFilter(e.target.value)}
+                >
+                  <option value="">All companies</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </>
+          }
+        />
       </div>
 
       {editDeviceId && (

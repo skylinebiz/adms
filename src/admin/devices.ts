@@ -7,7 +7,9 @@ import { appLogger as logger } from "../logger";
 import { requireSuperAdmin, resolveCompanyScope } from "../middleware/requireAdminAuth";
 import { dispatchWebhook, renderPunchWebhookBody } from "../webhooks/dispatcher";
 import { renderHeaders, SAMPLE_TEMPLATE_VARS } from "../webhooks/template";
-import { OPTIONS_LIMIT, paginationQuerySchema } from "../utils/pagination";
+import { OPTIONS_LIMIT } from "../utils/pagination";
+import { buildOrderBy, buildSearch, dataTableQuerySchema, nullsLast, SortColumns } from "../utils/datatable";
+import { config } from "../config";
 import { isValidTimeZone } from "../adms/timezone";
 import { computeDeviceStatus } from "../utils/deviceStatus";
 import { isSafeWebhookUrl } from "../utils/ssrfGuard";
@@ -103,21 +105,31 @@ function toDeviceListItem(device: {
 // it stays super_admin-only: resolveCompanyScope forces a company_admin's
 // query to their own companyId (never "all"), which a `null` row can
 // never match.
+const pendingSortColumns = {
+  serialNumber: (dir) => ({ serialNumber: dir }),
+  company: (dir) => ({ company: { name: dir } }),
+  pingCount: (dir) => ({ pingCount: dir }),
+  lastSeenAt: (dir) => ({ lastSeenAt: dir }),
+} satisfies SortColumns<Prisma.PendingDeviceOrderByWithRelationInput>;
+
 devicesRouter.get("/unregistered-pings", async (req, res) => {
-  const parsedQuery = paginationQuerySchema.safeParse(req.query);
+  const parsedQuery = dataTableQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
     res.status(400).json({ error: "Invalid query", details: parsedQuery.error.flatten() });
     return;
   }
-  const { page, pageSize } = parsedQuery.data;
+  const { page, pageSize, sortBy, sortDir, search } = parsedQuery.data;
 
   const scope = resolveCompanyScope(req, req.query.companyId as string | undefined);
-  const where = scope.all ? undefined : { companyId: scope.companyId };
+  const where: Prisma.PendingDeviceWhereInput = {
+    ...(scope.all ? {} : { companyId: scope.companyId }),
+    ...buildSearch<Prisma.PendingDeviceWhereInput>(search, [(t) => ({ serialNumber: t }), (t) => ({ company: { name: t } })]),
+  };
 
   const [pending, total] = await Promise.all([
     prisma.pendingDevice.findMany({
       where,
-      orderBy: { lastSeenAt: "desc" },
+      orderBy: buildOrderBy<Prisma.PendingDeviceOrderByWithRelationInput>(sortBy, sortDir, pendingSortColumns, [{ lastSeenAt: "desc" }]),
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: { company: { select: { id: true, name: true, slug: true } } },
@@ -283,21 +295,51 @@ devicesRouter.post("/claim", async (req, res) => {
   res.status(201).json({ device: { ...device, status: computeDeviceStatus(device.lastSeenAt) } });
 });
 
+const deviceListQuerySchema = dataTableQuerySchema.extend({
+  status: z.enum(["ONLINE", "OFFLINE", "UNKNOWN"]).optional(),
+});
+
+// "status" sorts by lastSeenAt (it's derived from it - see
+// computeDeviceStatus), so the most recently active devices group together
+// as ONLINE. Webhook and the action buttons aren't sortable.
+const deviceSortColumns = {
+  serialNumber: (dir) => ({ serialNumber: dir }),
+  label: (dir) => ({ label: dir }),
+  company: (dir) => ({ company: { name: dir } }),
+  status: (dir) => ({ lastSeenAt: nullsLast(dir) }),
+  lastSeenAt: (dir) => ({ lastSeenAt: nullsLast(dir) }),
+  createdAt: (dir) => ({ createdAt: dir }),
+} satisfies SortColumns<Prisma.DeviceOrderByWithRelationInput>;
+
+// Mirrors computeDeviceStatus at the query level, so filtering by ?status=
+// agrees with the badge computed for the same row.
+function deviceStatusCondition(status: "ONLINE" | "OFFLINE" | "UNKNOWN" | undefined): Prisma.DeviceWhereInput {
+  const cutoff = new Date(Date.now() - config.deviceOfflineThresholdMs);
+  if (status === "ONLINE") return { lastSeenAt: { gte: cutoff } };
+  if (status === "OFFLINE") return { lastSeenAt: { lt: cutoff } };
+  if (status === "UNKNOWN") return { lastSeenAt: null };
+  return {};
+}
+
 devicesRouter.get("/", async (req, res) => {
-  const parsedQuery = paginationQuerySchema.safeParse(req.query);
+  const parsedQuery = deviceListQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
     res.status(400).json({ error: "Invalid query", details: parsedQuery.error.flatten() });
     return;
   }
-  const { page, pageSize } = parsedQuery.data;
+  const { page, pageSize, sortBy, sortDir, search, status } = parsedQuery.data;
 
   const scope = resolveCompanyScope(req, req.query.companyId as string | undefined);
-  const where = scope.all ? undefined : { companyId: scope.companyId };
+  const where: Prisma.DeviceWhereInput = {
+    ...(scope.all ? {} : { companyId: scope.companyId }),
+    ...deviceStatusCondition(status),
+    ...buildSearch<Prisma.DeviceWhereInput>(search, [(t) => ({ serialNumber: t }), (t) => ({ label: t }), (t) => ({ company: { name: t } })]),
+  };
 
   const [devices, total] = await Promise.all([
     prisma.device.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: buildOrderBy<Prisma.DeviceOrderByWithRelationInput>(sortBy, sortDir, deviceSortColumns, [{ createdAt: "desc" }]),
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: { company: { select: { id: true, name: true, slug: true } } },
@@ -565,9 +607,18 @@ devicesRouter.get("/:id/commands", async (req, res) => {
 // (OPERLOG, USERINFO, FINGERTMP, FACE, or anything else a firmware variant
 // sends), for debugging what a device is actually sending. Optional
 // ?table= filter narrows to one table name.
-const rawLogsQuerySchema = paginationQuerySchema.extend({
+const rawLogsQuerySchema = dataTableQuerySchema.extend({
   table: z.string().optional(),
 });
+
+// Method and body size aren't sortable (a handful of distinct values /
+// computed, not stored); the rest are backed by (deviceId, <column>)
+// composite indexes.
+const rawLogSortColumns = {
+  createdAt: (dir) => ({ createdAt: dir }),
+  table: (dir) => ({ table: dir }),
+  endpoint: (dir) => ({ endpoint: dir }),
+} satisfies SortColumns<Prisma.DeviceRawLogOrderByWithRelationInput>;
 
 devicesRouter.get("/:id/raw-logs", async (req, res) => {
   const device = await prisma.device.findUnique({ where: { id: req.params.id } });
@@ -585,13 +636,17 @@ devicesRouter.get("/:id/raw-logs", async (req, res) => {
     res.status(400).json({ error: "Invalid query", details: parsedQuery.error.flatten() });
     return;
   }
-  const { page, pageSize, table } = parsedQuery.data;
-  const where = { deviceId: device.id, ...(table ? { table } : {}) };
+  const { page, pageSize, sortBy, sortDir, search, table } = parsedQuery.data;
+  const where: Prisma.DeviceRawLogWhereInput = {
+    deviceId: device.id,
+    ...(table ? { table } : {}),
+    ...buildSearch<Prisma.DeviceRawLogWhereInput>(search, [(t) => ({ table: t }), (t) => ({ endpoint: t })]),
+  };
 
   const [logs, total] = await Promise.all([
     prisma.deviceRawLog.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: buildOrderBy<Prisma.DeviceRawLogOrderByWithRelationInput>(sortBy, sortDir, rawLogSortColumns, [{ createdAt: "desc" }]),
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

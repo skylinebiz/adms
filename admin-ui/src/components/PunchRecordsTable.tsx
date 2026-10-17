@@ -3,10 +3,11 @@ import { useSearchParams } from "react-router-dom";
 import { api, ApiError, DeviceOption, PunchRecord } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useSelection } from "../hooks/useSelection";
+import { useDataTable } from "../hooks/useDataTable";
 import { formatAccurateTime, formatPunchTime } from "../utils/formatTime";
 import { webhookStatusLabel } from "../utils/webhookStatus";
 import DeliveryLogDrawer from "./DeliveryLogDrawer";
-import Pagination from "./Pagination";
+import DataTable, { Column } from "./DataTable";
 import { RotateCw, ScrollText, Trash2 } from "lucide-react";
 import IconButton from "./IconButton";
 
@@ -18,13 +19,8 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
   const showCheckboxColumn = canRetryBulk || canDelete;
 
   const [params, setParams] = useSearchParams();
-  const [records, setRecords] = useState<PunchRecord[]>([]);
   const [devices, setDevices] = useState<DeviceOption[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const pageSize = 25;
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const { selected, toggle, toggleAll, clear } = useSelection();
   const [viewingDeliveries, setViewingDeliveries] = useState<string | null>(null);
 
@@ -33,45 +29,46 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
   const from = params.get("from") ?? "";
   const to = params.get("to") ?? "";
 
-  useEffect(() => {
-    // Unpaginated (capped) - a filter dropdown needs the full set, not a page of it.
-    api.listDeviceOptions().then(({ devices }) => setDevices(devices));
-  }, []);
-
-  async function load() {
-    setLoading(true);
-    setError(null);
-    try {
+  const table = useDataTable<PunchRecord>({
+    fetcher: async (q) => {
       const query = {
         deviceId: deviceId || undefined,
         status: mode === "all" ? status || undefined : undefined,
         from: from || undefined,
         to: to || undefined,
-        page: String(page),
-        pageSize: String(pageSize),
+        page: String(q.page),
+        pageSize: String(q.pageSize),
+        sortBy: q.sortBy,
+        sortDir: q.sortDir,
+        search: q.search,
       };
       const result = mode === "failed" ? await api.listFailedPunchRecords(query) : await api.listPunchRecords(query);
-      setRecords(result.records);
-      setTotal(result.total);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load punch records");
-    } finally {
-      setLoading(false);
-    }
-  }
+      return { rows: result.records, total: result.total };
+    },
+    // The failed view's server-side default is "most recent attempt first",
+    // which isn't one of the sortable columns - so no header shows active.
+    defaultSort: mode === "failed" ? { sortBy: "", sortDir: "desc" } : { sortBy: "punchTime", sortDir: "desc" },
+    deps: [mode, deviceId, status, from, to],
+    errorMessage: "Failed to load punch records",
+  });
+  const error = actionError ?? table.error;
+  const load = table.reload;
 
   useEffect(() => {
-    load();
+    // Unpaginated (capped) - a filter dropdown needs the full set, not a page of it.
+    api.listDeviceOptions().then(({ devices }) => setDevices(devices));
+  }, []);
+
+  useEffect(() => {
     clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, deviceId, status, from, to, page]);
+  }, [table.rows]);
 
   function setFilter(key: string, value: string) {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
     else next.delete(key);
     setParams(next);
-    setPage(1);
   }
 
   async function retryOne(id: string) {
@@ -99,6 +96,64 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
     clear();
     await load();
   }
+
+  const columns: Column<PunchRecord>[] = [
+    { key: "devicePin", header: "PIN", sortable: true, render: (r) => r.devicePin },
+    { key: "device", header: "Device", sortable: true, render: (r) => r.device?.label ?? r.device?.serialNumber },
+    {
+      key: "punchTime",
+      header: "Punch time",
+      title: "Shown exactly as the device's own clock reported it, not converted to your timezone",
+      sortable: true,
+      render: (r) => formatPunchTime(r.punchTime),
+    },
+    {
+      key: "punchTimeUtc",
+      header: "Accurate time",
+      title:
+        "The real UTC instant, computed from the device's configured timezone - shown in your local time. Blank if the device has no timezone configured.",
+      sortable: true,
+      render: (r) => formatAccurateTime(r.punchTimeUtc),
+    },
+    { key: "verifyMode", header: "Verify mode", render: (r) => r.verifyMode },
+    {
+      key: "webhookStatus",
+      header: "Webhook status",
+      render: (r) => <span className={`badge badge-${r.webhookStatus}`}>{webhookStatusLabel(r.webhookStatus)}</span>,
+    },
+    { key: "webhookAttempts", header: "Attempts", sortable: true, render: (r) => r.webhookAttempts },
+    ...(mode === "failed"
+      ? [
+          {
+            key: "lastWebhookError",
+            header: "Last error",
+            cellClassName: "muted",
+            cellStyle: { maxWidth: 260, whiteSpace: "normal" as const },
+            render: (r: PunchRecord) => r.lastWebhookError ?? "—",
+          },
+        ]
+      : []),
+    {
+      key: "actions",
+      header: "",
+      cellClassName: "actions-cell",
+      render: (r) => (
+        <>
+          <IconButton icon={ScrollText} label="Delivery log" onClick={() => setViewingDeliveries(r.id)} />
+          {r.webhookStatus !== "delivered" && (
+            <IconButton
+              icon={RotateCw}
+              label="Retry now"
+              tooltip={r.canRetry ? undefined : "Retry unavailable - no active webhook"}
+              disabled={!r.canRetry}
+              onClick={() => retryOne(r.id)}
+            />
+          )}
+          {canDelete && <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => deleteOne(r.id)} />}
+        </>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -149,90 +204,24 @@ export default function PunchRecordsTable({ mode }: { mode: "all" | "failed" }) 
       {error && <div className="error-banner">{error}</div>}
 
       <div className="card">
-        {loading ? (
-          <p className="muted">Loading…</p>
-        ) : (
-          <>
-            <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  {showCheckboxColumn && (
-                    <th>
-                      <input
-                        type="checkbox"
-                        checked={records.length > 0 && records.every((r) => selected.has(r.id))}
-                        onChange={() => toggleAll(records.map((r) => r.id))}
-                      />
-                    </th>
-                  )}
-                  <th>PIN</th>
-                  <th>Device</th>
-                  <th title="Shown exactly as the device's own clock reported it, not converted to your timezone">
-                    Punch time
-                  </th>
-                  <th title="The real UTC instant, computed from the device's configured timezone - shown in your local time. Blank if the device has no timezone configured.">
-                    Accurate time
-                  </th>
-                  <th>Verify mode</th>
-                  <th>Webhook status</th>
-                  <th>Attempts</th>
-                  {mode === "failed" && <th>Last error</th>}
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {records.map((r) => (
-                  <tr key={r.id}>
-                    {showCheckboxColumn && (
-                      <td>
-                        <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} />
-                      </td>
-                    )}
-                    <td>{r.devicePin}</td>
-                    <td>{r.device?.label ?? r.device?.serialNumber}</td>
-                    <td>{formatPunchTime(r.punchTime)}</td>
-                    <td>{formatAccurateTime(r.punchTimeUtc)}</td>
-                    <td>{r.verifyMode}</td>
-                    <td>
-                      <span className={`badge badge-${r.webhookStatus}`}>{webhookStatusLabel(r.webhookStatus)}</span>
-                    </td>
-                    <td>{r.webhookAttempts}</td>
-                    {mode === "failed" && (
-                      <td style={{ maxWidth: 260, whiteSpace: "normal" }} className="muted">
-                        {r.lastWebhookError ?? "—"}
-                      </td>
-                    )}
-                    <td className="actions-cell">
-                      <IconButton icon={ScrollText} label="Delivery log" onClick={() => setViewingDeliveries(r.id)} />
-                      {r.webhookStatus !== "delivered" && (
-                        <IconButton
-                          icon={RotateCw}
-                          label="Retry now"
-                          tooltip={r.canRetry ? undefined : "Retry unavailable - no active webhook"}
-                          disabled={!r.canRetry}
-                          onClick={() => retryOne(r.id)}
-                        />
-                      )}
-                      {canDelete && (
-                        <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => deleteOne(r.id)} />
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {records.length === 0 && (
-                  <tr>
-                    <td colSpan={10} className="muted">
-                      No punch records found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            </div>
-            <Pagination page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
-          </>
-        )}
+        <DataTable
+          columns={columns}
+          rows={table.rows}
+          rowKey={(r) => r.id}
+          loading={table.loading}
+          sort={table.sort}
+          onSort={table.toggleSort}
+          page={table.page}
+          pageSize={table.pageSize}
+          total={table.total}
+          onPageChange={table.setPage}
+          onPageSizeChange={table.setPageSize}
+          emptyMessage="No punch records found."
+          searchValue={table.searchInput}
+          onSearchChange={table.setSearchInput}
+          searchPlaceholder="Search PIN or device…"
+          selection={showCheckboxColumn ? { selected, toggle, toggleAll } : undefined}
+        />
       </div>
 
       {viewingDeliveries && (

@@ -2,73 +2,96 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, ApiError, RawRequestLog } from "../api";
 import { useSelection } from "../hooks/useSelection";
-import Pagination from "../components/Pagination";
+import { useDataTable } from "../hooks/useDataTable";
+import DataTable, { Column } from "../components/DataTable";
 import RawEntryDrawer from "../components/RawEntryDrawer";
 import { formatDateTime } from "../utils/dateFormat";
 import { Eye, Trash2 } from "lucide-react";
 import IconButton from "../components/IconButton";
 
-const PAGE_SIZE = 25;
-
 export default function RawRequestLogPage() {
   const [params, setParams] = useSearchParams();
-  const [requests, setRequests] = useState<RawRequestLog[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [viewing, setViewing] = useState<RawRequestLog | null>(null);
   const { selected, toggle, toggleAll, clear } = useSelection();
 
-  const serialNumber = params.get("serialNumber") ?? "";
   const endpoint = params.get("endpoint") ?? "";
 
-  async function load() {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await api.listRawRequests({
-        serialNumber: serialNumber || undefined,
-        endpoint: endpoint || undefined,
-        page,
-        pageSize: PAGE_SIZE,
-      });
-      setRequests(result.requests);
-      setTotal(result.total);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load raw request log");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const table = useDataTable<RawRequestLog>({
+    fetcher: async (q) => {
+      const result = await api.listRawRequests({ ...q, endpoint: endpoint || undefined });
+      return { rows: result.requests, total: result.total };
+    },
+    defaultSort: { sortBy: "createdAt", sortDir: "desc" },
+    deps: [endpoint],
+    errorMessage: "Failed to load raw request log",
+  });
+  const error = actionError ?? table.error;
+  const load = table.reload;
 
   useEffect(() => {
-    load();
     clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serialNumber, endpoint, page]);
+  }, [table.rows]);
 
   function setFilter(key: string, value: string) {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
     else next.delete(key);
     setParams(next);
-    setPage(1);
   }
 
   async function deleteOne(id: string) {
     if (!confirm("Delete this raw request entry? This cannot be undone.")) return;
-    await api.deleteRawRequest(id);
-    await load();
+    try {
+      await api.deleteRawRequest(id);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to delete");
+    }
   }
 
   async function deleteSelected() {
     if (selected.size === 0) return;
     if (!confirm(`Delete ${selected.size} raw request entr${selected.size === 1 ? "y" : "ies"}? This cannot be undone.`)) return;
-    await api.deleteRawRequestsBulk(Array.from(selected));
-    clear();
-    await load();
+    try {
+      await api.deleteRawRequestsBulk(Array.from(selected));
+      clear();
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to delete");
+    }
   }
+
+  const columns: Column<RawRequestLog>[] = [
+    { key: "createdAt", header: "Received", sortable: true, render: (r) => formatDateTime(r.createdAt) },
+    {
+      key: "serialNumber",
+      header: "SN",
+      sortable: true,
+      render: (r) =>
+        r.serialNumber ? <code className="mono">{r.serialNumber}</code> : <span className="muted">(missing)</span>,
+    },
+    { key: "method", header: "Method", render: (r) => r.method },
+    {
+      key: "endpoint",
+      header: "Endpoint",
+      sortable: true,
+      render: (r) => <code className="mono">{r.endpoint}</code>,
+    },
+    { key: "bodySize", header: "Body size", render: (r) => `${r.rawBody?.length ?? 0} chars` },
+    {
+      key: "actions",
+      header: "",
+      cellClassName: "actions-cell",
+      render: (r) => (
+        <>
+          <IconButton icon={Eye} label="View" onClick={() => setViewing(r)} />
+          <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => deleteOne(r.id)} />
+        </>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -80,14 +103,6 @@ export default function RawRequestLogPage() {
       {error && <div className="error-banner">{error}</div>}
 
       <div className="filters">
-        <div className="field">
-          <label>Serial number</label>
-          <input
-            placeholder="Filter by exact SN"
-            value={serialNumber}
-            onChange={(e) => setFilter("serialNumber", e.target.value)}
-          />
-        </div>
         <div className="field">
           <label>Endpoint</label>
           <select value={endpoint} onChange={(e) => setFilter("endpoint", e.target.value)}>
@@ -104,67 +119,24 @@ export default function RawRequestLogPage() {
       </div>
 
       <div className="card">
-        {loading ? (
-          <p className="muted">Loading…</p>
-        ) : (
-          <>
-            <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>
-                    <input
-                      type="checkbox"
-                      checked={requests.length > 0 && requests.every((r) => selected.has(r.id))}
-                      onChange={() => toggleAll(requests.map((r) => r.id))}
-                    />
-                  </th>
-                  <th>Received</th>
-                  <th>SN</th>
-                  <th>Method</th>
-                  <th>Endpoint</th>
-                  <th>Body size</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {requests.map((r) => (
-                  <tr key={r.id}>
-                    <td>
-                      <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} />
-                    </td>
-                    <td>{formatDateTime(r.createdAt)}</td>
-                    <td>
-                      {r.serialNumber ? (
-                        <code className="mono">{r.serialNumber}</code>
-                      ) : (
-                        <span className="muted">(missing)</span>
-                      )}
-                    </td>
-                    <td>{r.method}</td>
-                    <td>
-                      <code className="mono">{r.endpoint}</code>
-                    </td>
-                    <td>{r.rawBody?.length ?? 0} chars</td>
-                    <td className="actions-cell">
-                      <IconButton icon={Eye} label="View" onClick={() => setViewing(r)} />
-                      <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => deleteOne(r.id)} />
-                    </td>
-                  </tr>
-                ))}
-                {requests.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="muted">
-                      No raw requests recorded yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            </div>
-            <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
-          </>
-        )}
+        <DataTable
+          columns={columns}
+          rows={table.rows}
+          rowKey={(r) => r.id}
+          loading={table.loading}
+          sort={table.sort}
+          onSort={table.toggleSort}
+          page={table.page}
+          pageSize={table.pageSize}
+          total={table.total}
+          onPageChange={table.setPage}
+          onPageSizeChange={table.setPageSize}
+          emptyMessage="No raw requests recorded yet."
+          searchValue={table.searchInput}
+          onSearchChange={table.setSearchInput}
+          searchPlaceholder="Search serial number or endpoint…"
+          selection={{ selected, toggle, toggleAll }}
+        />
       </div>
 
       {viewing && <RawEntryDrawer entry={viewing} onClose={() => setViewing(null)} />}

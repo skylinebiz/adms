@@ -1,9 +1,10 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../db/client";
 import { requireSuperAdmin, resolveCompanyScope } from "../middleware/requireAdminAuth";
-import { paginationQuerySchema } from "../utils/pagination";
+import { buildOrderBy, buildSearch, dataTableQuerySchema, SortColumns } from "../utils/datatable";
 
 export const adminUsersRouter = Router();
 
@@ -27,21 +28,37 @@ function toPublicUser(user: {
 
 // company_admin can only see/manage admin users within their own company.
 // super_admin sees everyone, optionally filtered by ?companyId=.
+const listQuerySchema = dataTableQuerySchema.extend({
+  role: z.enum(["SUPER_ADMIN", "COMPANY_ADMIN"]).optional(),
+});
+
+// Sortable columns - each one is backed by an index (see schema.prisma).
+const sortColumns = {
+  email: (dir) => ({ email: dir }),
+  role: (dir) => ({ role: dir }),
+  company: (dir) => ({ company: { name: dir } }),
+  createdAt: (dir) => ({ createdAt: dir }),
+} satisfies SortColumns<Prisma.AdminUserOrderByWithRelationInput>;
+
 adminUsersRouter.get("/", async (req, res) => {
-  const parsedQuery = paginationQuerySchema.safeParse(req.query);
+  const parsedQuery = listQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
     res.status(400).json({ error: "Invalid query", details: parsedQuery.error.flatten() });
     return;
   }
-  const { page, pageSize } = parsedQuery.data;
+  const { page, pageSize, sortBy, sortDir, search, role } = parsedQuery.data;
 
   const scope = resolveCompanyScope(req, req.query.companyId as string | undefined);
-  const where = scope.all ? {} : { companyId: scope.companyId };
+  const where: Prisma.AdminUserWhereInput = {
+    ...(scope.all ? {} : { companyId: scope.companyId }),
+    ...(role ? { role } : {}),
+    ...buildSearch<Prisma.AdminUserWhereInput>(search, [(t) => ({ email: t }), (t) => ({ company: { name: t } })]),
+  };
 
   const [users, total] = await Promise.all([
     prisma.adminUser.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: buildOrderBy<Prisma.AdminUserOrderByWithRelationInput>(sortBy, sortDir, sortColumns, [{ createdAt: "desc" }]),
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

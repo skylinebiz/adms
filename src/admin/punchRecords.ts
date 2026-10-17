@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../db/client";
 import { requireSuperAdmin, resolveCompanyScope } from "../middleware/requireAdminAuth";
 import { paginationQuerySchema } from "../utils/pagination";
+import { buildOrderBy, buildSearch, nullsLast, SortColumns } from "../utils/datatable";
 import { getOrCreatePlatformSettings } from "../utils/retention";
 
 export const punchRecordsRouter = Router();
@@ -117,7 +118,22 @@ const listQuerySchema = z.object({
   to: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
+  sortBy: z.string().max(50).optional(),
+  sortDir: z.enum(["asc", "desc"]).optional(),
+  search: z.string().trim().max(100).optional(),
 });
+
+// Sortable columns - each backed by an index (see schema.prisma). Webhook
+// status is derived from several fields + the device's live config, verify
+// mode has a handful of values, and last error is free text, so none of
+// those are sortable.
+const sortColumns = {
+  devicePin: (dir) => ({ devicePin: dir }),
+  device: (dir) => ({ device: { label: dir } }),
+  punchTime: (dir) => ({ punchTime: dir }),
+  punchTimeUtc: (dir) => ({ punchTimeUtc: nullsLast(dir) }),
+  webhookAttempts: (dir) => ({ webhookAttempts: dir }),
+} satisfies SortColumns<Prisma.PunchRecordOrderByWithRelationInput>;
 
 // Each condition below is a separate item in an AND array (rather than
 // merged keys on one object) so that multiple independent `device: {...}`
@@ -130,6 +146,12 @@ async function buildScopedWhere(req: import("express").Request, extra: Prisma.Pu
   const scope = resolveCompanyScope(req, parsed.data.companyId);
 
   const conditions: Prisma.PunchRecordWhereInput[] = [extra, statusCondition(parsed.data.status, maxAttempts)];
+  const searchCondition = buildSearch<Prisma.PunchRecordWhereInput>(parsed.data.search, [
+    (t) => ({ devicePin: t }),
+    (t) => ({ device: { serialNumber: t } }),
+    (t) => ({ device: { label: t } }),
+  ]);
+  if (searchCondition) conditions.push(searchCondition);
   if (!scope.all) conditions.push({ device: { companyId: scope.companyId } });
   if (parsed.data.deviceId) conditions.push({ deviceId: parsed.data.deviceId });
   if (parsed.data.from || parsed.data.to) {
@@ -141,7 +163,14 @@ async function buildScopedWhere(req: import("express").Request, extra: Prisma.Pu
     });
   }
 
-  return { ok: true, where: { AND: conditions }, page: parsed.data.page, pageSize: parsed.data.pageSize } as const;
+  return {
+    ok: true,
+    where: { AND: conditions },
+    page: parsed.data.page,
+    pageSize: parsed.data.pageSize,
+    sortBy: parsed.data.sortBy,
+    sortDir: parsed.data.sortDir,
+  } as const;
 }
 
 punchRecordsRouter.get("/", async (req, res) => {
@@ -152,11 +181,11 @@ punchRecordsRouter.get("/", async (req, res) => {
     return;
   }
 
-  const { where, page, pageSize } = built;
+  const { where, page, pageSize, sortBy, sortDir } = built;
   const [records, total] = await Promise.all([
     prisma.punchRecord.findMany({
       where,
-      orderBy: { punchTime: "desc" },
+      orderBy: buildOrderBy<Prisma.PunchRecordOrderByWithRelationInput>(sortBy, sortDir, sortColumns, [{ punchTime: "desc" }]),
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: { device: { select: deviceSelect } },
@@ -185,11 +214,11 @@ punchRecordsRouter.get("/failed", async (req, res) => {
     return;
   }
 
-  const { where, page, pageSize } = built;
+  const { where, page, pageSize, sortBy, sortDir } = built;
   const [records, total] = await Promise.all([
     prisma.punchRecord.findMany({
       where,
-      orderBy: { nextAttemptAt: "desc" },
+      orderBy: buildOrderBy<Prisma.PunchRecordOrderByWithRelationInput>(sortBy, sortDir, sortColumns, [{ nextAttemptAt: "desc" }]),
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: { device: { select: deviceSelect } },

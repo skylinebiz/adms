@@ -3,13 +3,12 @@ import { useSearchParams } from "react-router-dom";
 import { api, ApiError, DeviceOption, DeviceRawLog } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useSelection } from "../hooks/useSelection";
-import Pagination from "../components/Pagination";
+import { useDataTable } from "../hooks/useDataTable";
+import DataTable, { Column } from "../components/DataTable";
 import RawEntryDrawer from "../components/RawEntryDrawer";
 import { formatDateTime } from "../utils/dateFormat";
 import { Eye, Trash2 } from "lucide-react";
 import IconButton from "../components/IconButton";
-
-const PAGE_SIZE = 25;
 
 export default function RawDataDump() {
   const { user } = useAuth();
@@ -17,68 +16,93 @@ export default function RawDataDump() {
 
   const [params, setParams] = useSearchParams();
   const [devices, setDevices] = useState<DeviceOption[]>([]);
-  const [logs, setLogs] = useState<DeviceRawLog[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [viewing, setViewing] = useState<DeviceRawLog | null>(null);
   const { selected, toggle, toggleAll, clear } = useSelection();
 
   const deviceId = params.get("deviceId") ?? "";
-  const table = params.get("table") ?? "";
+  const tableFilter = params.get("table") ?? "";
+
+  const table = useDataTable<DeviceRawLog>({
+    fetcher: async (q) => {
+      const result = await api.getDeviceRawLogs(deviceId, { ...q, table: tableFilter || undefined });
+      return { rows: result.logs, total: result.total };
+    },
+    defaultSort: { sortBy: "createdAt", sortDir: "desc" },
+    deps: [deviceId, tableFilter],
+    enabled: Boolean(deviceId),
+    errorMessage: "Failed to load raw data",
+  });
+  const error = actionError ?? table.error;
+  const load = table.reload;
 
   useEffect(() => {
     api.listDeviceOptions().then(({ devices }) => setDevices(devices));
   }, []);
 
-  async function load() {
-    if (!deviceId) {
-      setLogs([]);
-      setTotal(0);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await api.getDeviceRawLogs(deviceId, { table: table || undefined, page, pageSize: PAGE_SIZE });
-      setLogs(result.logs);
-      setTotal(result.total);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load raw data");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
-    load();
     clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deviceId, table, page]);
+  }, [table.rows]);
 
   function setFilter(key: string, value: string) {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
     else next.delete(key);
     setParams(next);
-    setPage(1);
   }
 
   async function deleteOne(id: string) {
     if (!deviceId) return;
     if (!confirm("Delete this raw data entry? This cannot be undone.")) return;
-    await api.deleteDeviceRawLog(deviceId, id);
-    await load();
+    try {
+      await api.deleteDeviceRawLog(deviceId, id);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to delete");
+    }
   }
 
   async function deleteSelected() {
     if (!deviceId || selected.size === 0) return;
     if (!confirm(`Delete ${selected.size} raw data entr${selected.size === 1 ? "y" : "ies"}? This cannot be undone.`)) return;
-    await api.deleteDeviceRawLogsBulk(deviceId, Array.from(selected));
-    clear();
-    await load();
+    try {
+      await api.deleteDeviceRawLogsBulk(deviceId, Array.from(selected));
+      clear();
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to delete");
+    }
   }
+
+  const columns: Column<DeviceRawLog>[] = [
+    { key: "createdAt", header: "Received", sortable: true, render: (l) => formatDateTime(l.createdAt) },
+    {
+      key: "table",
+      header: "Table",
+      sortable: true,
+      render: (l) => (l.table ? <span className="badge badge-pending">{l.table}</span> : <span className="muted">—</span>),
+    },
+    {
+      key: "endpoint",
+      header: "Endpoint",
+      sortable: true,
+      render: (l) => <code className="mono">{l.endpoint}</code>,
+    },
+    { key: "method", header: "Method", render: (l) => l.method },
+    { key: "bodySize", header: "Body size", render: (l) => `${l.rawBody?.length ?? 0} chars` },
+    {
+      key: "actions",
+      header: "",
+      cellClassName: "actions-cell",
+      render: (l) => (
+        <>
+          <IconButton icon={Eye} label="View" onClick={() => setViewing(l)} />
+          {canDelete && <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => deleteOne(l.id)} />}
+        </>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -105,7 +129,7 @@ export default function RawDataDump() {
           <label>Table</label>
           <input
             placeholder="e.g. OPERLOG, USERINFO"
-            value={table}
+            value={tableFilter}
             onChange={(e) => setFilter("table", e.target.value)}
           />
         </div>
@@ -119,66 +143,25 @@ export default function RawDataDump() {
       <div className="card">
         {!deviceId ? (
           <p className="muted">Select a device above to see its raw data dump.</p>
-        ) : loading ? (
-          <p className="muted">Loading…</p>
         ) : (
-          <>
-            <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  {canDelete && (
-                    <th>
-                      <input
-                        type="checkbox"
-                        checked={logs.length > 0 && logs.every((l) => selected.has(l.id))}
-                        onChange={() => toggleAll(logs.map((l) => l.id))}
-                      />
-                    </th>
-                  )}
-                  <th>Received</th>
-                  <th>Table</th>
-                  <th>Endpoint</th>
-                  <th>Method</th>
-                  <th>Body size</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((l) => (
-                  <tr key={l.id}>
-                    {canDelete && (
-                      <td>
-                        <input type="checkbox" checked={selected.has(l.id)} onChange={() => toggle(l.id)} />
-                      </td>
-                    )}
-                    <td>{formatDateTime(l.createdAt)}</td>
-                    <td>{l.table ? <span className="badge badge-pending">{l.table}</span> : <span className="muted">—</span>}</td>
-                    <td>
-                      <code className="mono">{l.endpoint}</code>
-                    </td>
-                    <td>{l.method}</td>
-                    <td>{l.rawBody?.length ?? 0} chars</td>
-                    <td className="actions-cell">
-                      <IconButton icon={Eye} label="View" onClick={() => setViewing(l)} />
-                      {canDelete && (
-                        <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => deleteOne(l.id)} />
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {logs.length === 0 && (
-                  <tr>
-                    <td colSpan={canDelete ? 7 : 6} className="muted">
-                      No raw (non-ATTLOG) data recorded for this device yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            </div>
-            <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
-          </>
+          <DataTable
+            columns={columns}
+            rows={table.rows}
+            rowKey={(l) => l.id}
+            loading={table.loading}
+            sort={table.sort}
+            onSort={table.toggleSort}
+            page={table.page}
+            pageSize={table.pageSize}
+            total={table.total}
+            onPageChange={table.setPage}
+            onPageSizeChange={table.setPageSize}
+            emptyMessage="No raw (non-ATTLOG) data recorded for this device yet."
+            searchValue={table.searchInput}
+            onSearchChange={table.setSearchInput}
+            searchPlaceholder="Search table or endpoint…"
+            selection={canDelete ? { selected, toggle, toggleAll } : undefined}
+          />
         )}
       </div>
 

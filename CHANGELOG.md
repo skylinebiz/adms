@@ -12,6 +12,24 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.18.0] - 2026-10-17
+
+### Added
+
+- Every table in the admin panel (Companies, Admin Users, Devices, Unregistered
+  Devices, Punch Records, Failed Webhooks, Raw Data Dump, Raw Request Log) is now
+  a server-side datatable: click a column header to sort, use the search box to
+  filter, and pick 10/25/50/100 rows per page. Sorting, searching and paging all
+  happen in the database, so large tables stay fast.
+- New filters: Devices by status and (super admin) company; Admin Users by role
+  and (super admin) company. The Raw Request Log's exact serial-number filter is
+  now the search box (substring match, also matches the endpoint).
+- Shared backend helper `src/utils/datatable.ts` (whitelisted sort columns, stable
+  `id` tiebreaker, case-insensitive search) used by every list endpoint.
+- Migration `20261017120000_datatable_sort_indexes` adds an index for each
+  sortable column. Columns that are computed, free text or near-constant (webhook
+  status, verify mode, last error, method, body size, secret) are not sortable.
+
 ## [2.17.3] - 2026-10-07
 
 ### Changed

@@ -43,6 +43,14 @@ export interface PageParams {
   pageSize?: number;
 }
 
+// Server-side datatable query: pagination + sort + free-text search. The
+// backend ignores a sortBy it doesn't recognise (see src/utils/datatable.ts).
+export interface TableParams extends PageParams {
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
+  search?: string;
+}
+
 // Public - no session required, so the login/signup screens can show it too.
 export function getVersion() {
   return get<{ version: string }>("/version");
@@ -223,10 +231,8 @@ export const api = {
   changePassword: (currentPassword: string, newPassword: string) =>
     patch<{ ok: true }>("/auth/me/password", { currentPassword, newPassword }),
 
-  listCompanies: (params: PageParams = {}) =>
-    get<{ companies: Company[] } & Paginated<Company>>(
-      `/companies${buildQuery({ page: params.page, pageSize: params.pageSize })}`
-    ),
+  listCompanies: (params: TableParams = {}) =>
+    get<{ companies: Company[] } & Paginated<Company>>(`/companies${buildQuery({ ...params })}`),
   listCompanyOptions: () => get<{ companies: CompanyOption[] }>("/companies/options"),
   createCompany: (data: { name: string; slug: string }) => post<{ company: Company }>("/companies", data),
   // slug is fixed at creation - changing it would orphan every device
@@ -234,10 +240,8 @@ export const api = {
   updateCompany: (id: string, data: { name: string }) => patch<{ company: Company }>(`/companies/${id}`, data),
   deleteCompany: (id: string) => del<{ ok: true }>(`/companies/${id}`),
 
-  listAdminUsers: (params: { companyId?: string } & PageParams = {}) =>
-    get<{ adminUsers: AdminUserSummary[] } & Paginated<AdminUserSummary>>(
-      `/admin-users${buildQuery({ companyId: params.companyId, page: params.page, pageSize: params.pageSize })}`
-    ),
+  listAdminUsers: (params: { companyId?: string; role?: string } & TableParams = {}) =>
+    get<{ adminUsers: AdminUserSummary[] } & Paginated<AdminUserSummary>>(`/admin-users${buildQuery({ ...params })}`),
   createAdminUser: (data: { email: string; password: string; role: string; companyId: string | null }) =>
     post<{ adminUser: AdminUserSummary }>("/admin-users", data),
   updateAdminUser: (id: string, data: Partial<{ email: string; role: string; companyId: string | null }>) =>
@@ -246,10 +250,8 @@ export const api = {
   resetAdminUserPassword: (id: string, newPassword: string) =>
     post<{ ok: true }>(`/admin-users/${id}/reset-password`, { newPassword }),
 
-  listDevices: (params: { companyId?: string } & PageParams = {}) =>
-    get<{ devices: Device[] } & Paginated<Device>>(
-      `/devices${buildQuery({ companyId: params.companyId, page: params.page, pageSize: params.pageSize })}`
-    ),
+  listDevices: (params: { companyId?: string; status?: string } & TableParams = {}) =>
+    get<{ devices: Device[] } & Paginated<Device>>(`/devices${buildQuery({ ...params })}`),
   listDeviceOptions: (companyId?: string) =>
     get<{ devices: DeviceOption[] }>(`/devices/options${buildQuery({ companyId })}`),
   getDevice: (id: string) => get<{ device: Device }>(`/devices/${id}`),
@@ -276,7 +278,7 @@ export const api = {
       bodyTemplate?: unknown | null;
     }
   ) => post<TestWebhookResult>(`/devices/${id}/test-webhook`, overrides),
-  listUnregisteredPings: (params: PageParams = {}) =>
+  listUnregisteredPings: (params: TableParams = {}) =>
     get<
       {
         pings: {
@@ -288,31 +290,24 @@ export const api = {
           company: { id: string; name: string; slug: string } | null;
         }[];
       } & Paginated<unknown>
-    >(`/devices/unregistered-pings${buildQuery({ page: params.page, pageSize: params.pageSize })}`),
+    >(`/devices/unregistered-pings${buildQuery({ ...params })}`),
   claimDevice: (data: { serialNumber: string; companyId: string; label?: string; timezone: string }) =>
     post<{ device: Device }>("/devices/claim", data),
   deleteUnregisteredPing: (serialNumber: string) =>
     del<{ ok: true; deleted: number }>(`/devices/unregistered-pings/${encodeURIComponent(serialNumber)}`),
   deleteUnregisteredPingsBulk: (serialNumbers: string[]) =>
     post<{ ok: true; deleted: number }>("/devices/unregistered-pings/delete-bulk", { serialNumbers }),
-  getDeviceRawLogs: (deviceId: string, params: { table?: string } & PageParams = {}) =>
+  getDeviceRawLogs: (deviceId: string, params: { table?: string } & TableParams = {}) =>
     get<{ logs: DeviceRawLog[] } & Paginated<DeviceRawLog>>(
-      `/devices/${deviceId}/raw-logs${buildQuery({ table: params.table, page: params.page, pageSize: params.pageSize })}`
+      `/devices/${deviceId}/raw-logs${buildQuery({ ...params })}`
     ),
   sendDeviceCommand: (deviceId: string, command: string) =>
     post<{ command: DeviceCommandLog }>(`/devices/${deviceId}/commands`, { command }),
   listDeviceCommands: (deviceId: string) => get<{ commands: DeviceCommandLog[] }>(`/devices/${deviceId}/commands`),
   listWebhookTemplates: () => get<{ templates: WebhookTemplate[] }>("/webhook-templates"),
 
-  listRawRequests: (params: { serialNumber?: string; endpoint?: string } & PageParams = {}) =>
-    get<{ requests: RawRequestLog[] } & Paginated<RawRequestLog>>(
-      `/raw-requests${buildQuery({
-        serialNumber: params.serialNumber,
-        endpoint: params.endpoint,
-        page: params.page,
-        pageSize: params.pageSize,
-      })}`
-    ),
+  listRawRequests: (params: { serialNumber?: string; endpoint?: string } & TableParams = {}) =>
+    get<{ requests: RawRequestLog[] } & Paginated<RawRequestLog>>(`/raw-requests${buildQuery({ ...params })}`),
 
   listPunchRecords: (params: Record<string, string | undefined>) => {
     const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v) as [string, string][]).toString();

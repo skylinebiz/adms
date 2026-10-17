@@ -2,14 +2,13 @@ import { useEffect, useState } from "react";
 import { api, ApiError, CompanyOption } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useSelection } from "../hooks/useSelection";
-import Pagination from "../components/Pagination";
+import DataTable, { Column } from "../components/DataTable";
+import { useDataTable } from "../hooks/useDataTable";
 import AddDeviceGuide from "../components/AddDeviceGuide";
 import { DEFAULT_TIMEZONE, TIMEZONE_OPTIONS } from "../utils/timezoneOptions";
 import { formatDateTime } from "../utils/dateFormat";
 import { CirclePlus, RefreshCw, Trash2 } from "lucide-react";
 import IconButton from "../components/IconButton";
-
-const PAGE_SIZE = 25;
 
 interface Ping {
   serialNumber: string;
@@ -23,39 +22,34 @@ interface Ping {
 export default function UnregisteredDevices() {
   const { user } = useAuth();
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
-  const [pings, setPings] = useState<Ping[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [claiming, setClaiming] = useState<string | null>(null);
   const [companyChoice, setCompanyChoice] = useState<Record<string, string>>({});
   const [timezoneChoice, setTimezoneChoice] = useState<Record<string, string>>({});
   const { selected, toggle, toggleAll, clear } = useSelection();
 
-  async function load() {
-    setLoading(true);
-    try {
-      const [p, c] = await Promise.all([
-        api.listUnregisteredPings({ page, pageSize: PAGE_SIZE }),
-        api.listCompanyOptions(),
-      ]);
-      setPings(p.pings);
-      setTotal(p.total);
-      setCompanies(c.companies);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load unregistered devices");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const table = useDataTable<Ping>({
+    fetcher: async (q) => {
+      const r = await api.listUnregisteredPings(q);
+      return { rows: r.pings, total: r.total };
+    },
+    defaultSort: { sortBy: "lastSeenAt", sortDir: "desc" },
+    errorMessage: "Failed to load unregistered devices",
+  });
+  const pings = table.rows;
+  const loading = table.loading;
+  const error = actionError ?? table.error;
+  const load = table.reload;
 
   useEffect(() => {
-    load();
+    api.listCompanyOptions().then((c) => setCompanies(c.companies));
+  }, []);
+
+  useEffect(() => {
     clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  }, [table.rows]);
 
   async function onClaim(serialNumber: string) {
     // company_admin: implicitly their own company - self-service, no picker
@@ -103,7 +97,100 @@ export default function UnregisteredDevices() {
     }
   }
 
-  const emptyStateColSpan = isSuperAdmin ? 9 : 6;
+  const columns: Column<Ping>[] = [
+    {
+      key: "serialNumber",
+      header: "Serial number",
+      sortable: true,
+      render: (p) => <code className="mono">{p.serialNumber}</code>,
+    },
+    {
+      key: "secret",
+      header: "Secret",
+      render: (p) =>
+        p.secret ? <code className="mono">{p.secret}</code> : <span className="muted">none (open path)</span>,
+    },
+    ...(isSuperAdmin
+      ? [
+          {
+            key: "company",
+            header: "Company",
+            sortable: true,
+            render: (p: Ping) =>
+              p.company ? (
+                p.company.name
+              ) : (
+                <span className="muted" title="Legacy /iclock ping or an unresolved company URL">
+                  unscoped
+                </span>
+              ),
+          },
+        ]
+      : []),
+    { key: "pingCount", header: "Ping count", sortable: true, render: (p) => p.pingCount },
+    { key: "lastSeenAt", header: "Last seen", sortable: true, render: (p) => formatDateTime(p.lastSeenAt) },
+    ...(isSuperAdmin
+      ? [
+          {
+            key: "claimCompany",
+            header: "Claim into company",
+            cellStyle: { minWidth: 180 },
+            render: (p: Ping) => (
+              <select
+                value={companyChoice[p.serialNumber] ?? p.companyId ?? ""}
+                onChange={(e) => setCompanyChoice((s) => ({ ...s, [p.serialNumber]: e.target.value }))}
+              >
+                <option value="">Select company…</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            ),
+          },
+        ]
+      : []),
+    {
+      key: "timezone",
+      header: "Timezone",
+      // min-width so the selected zone's label (e.g. "(UTC+05:30) Asia/Calcutta")
+      // stays legible instead of the auto table layout squeezing this column down
+      // to a sliver - the admin needs to actually read what's picked before claiming.
+      cellStyle: { minWidth: 240 },
+      render: (p) => (
+        <select
+          value={timezoneChoice[p.serialNumber] ?? DEFAULT_TIMEZONE}
+          onChange={(e) => setTimezoneChoice((s) => ({ ...s, [p.serialNumber]: e.target.value }))}
+        >
+          {TIMEZONE_OPTIONS.map((opt) => (
+            <option key={opt.tz} value={opt.tz}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      cellClassName: "actions-cell",
+      render: (p) => (
+        <>
+          <IconButton
+            icon={CirclePlus}
+            label="Claim"
+            variant="primary"
+            disabled={claiming === p.serialNumber}
+            onClick={() => onClaim(p.serialNumber)}
+          />
+          {isSuperAdmin && (
+            <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => deleteOne(p.serialNumber)} />
+          )}
+        </>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -128,130 +215,24 @@ export default function UnregisteredDevices() {
             </button>
           </div>
         </div>
-        {loading ? (
-          <p className="muted">Loading…</p>
-        ) : (
-          <>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    {isSuperAdmin && (
-                      <th>
-                        <input
-                          type="checkbox"
-                          checked={pings.length > 0 && pings.every((p) => selected.has(p.serialNumber))}
-                          onChange={() => toggleAll(pings.map((p) => p.serialNumber))}
-                        />
-                      </th>
-                    )}
-                    <th>Serial number</th>
-                    <th>Secret</th>
-                    {isSuperAdmin && <th>Company</th>}
-                    <th>Ping count</th>
-                    <th>Last seen</th>
-                    {isSuperAdmin && <th>Claim into company</th>}
-                    <th>Timezone</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pings.map((p) => (
-                    <tr key={p.serialNumber}>
-                      {isSuperAdmin && (
-                        <td>
-                          <input
-                            type="checkbox"
-                            checked={selected.has(p.serialNumber)}
-                            onChange={() => toggle(p.serialNumber)}
-                          />
-                        </td>
-                      )}
-                      <td>
-                        <code className="mono">{p.serialNumber}</code>
-                      </td>
-                      <td>
-                        {p.secret ? (
-                          <code className="mono">{p.secret}</code>
-                        ) : (
-                          <span className="muted">none (open path)</span>
-                        )}
-                      </td>
-                      {isSuperAdmin && (
-                        <td>
-                          {p.company ? (
-                            p.company.name
-                          ) : (
-                            <span className="muted" title="Legacy /iclock ping or an unresolved company URL">
-                              unscoped
-                            </span>
-                          )}
-                        </td>
-                      )}
-                      <td>{p.pingCount}</td>
-                      <td>{formatDateTime(p.lastSeenAt)}</td>
-                      {isSuperAdmin && (
-                        <td style={{ minWidth: 180 }}>
-                          <select
-                            value={companyChoice[p.serialNumber] ?? p.companyId ?? ""}
-                            onChange={(e) => setCompanyChoice((s) => ({ ...s, [p.serialNumber]: e.target.value }))}
-                          >
-                            <option value="">Select company…</option>
-                            {companies.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                      )}
-                      {/* min-width so the selected zone's label (e.g. "(UTC+05:30) Asia/Calcutta")
-                          stays legible instead of the auto table layout squeezing this column down
-                          to a sliver - the admin needs to actually read what's picked before claiming. */}
-                      <td style={{ minWidth: 240 }}>
-                        <select
-                          value={timezoneChoice[p.serialNumber] ?? DEFAULT_TIMEZONE}
-                          onChange={(e) => setTimezoneChoice((s) => ({ ...s, [p.serialNumber]: e.target.value }))}
-                        >
-                          {TIMEZONE_OPTIONS.map((opt) => (
-                            <option key={opt.tz} value={opt.tz}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="actions-cell">
-                        <IconButton
-                          icon={CirclePlus}
-                          label="Claim"
-                          variant="primary"
-                          disabled={claiming === p.serialNumber}
-                          onClick={() => onClaim(p.serialNumber)}
-                        />
-                        {isSuperAdmin && (
-                          <IconButton
-                            icon={Trash2}
-                            label="Delete"
-                            variant="danger"
-                            onClick={() => deleteOne(p.serialNumber)}
-                          />
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {pings.length === 0 && (
-                    <tr>
-                      <td colSpan={emptyStateColSpan} className="muted empty-cell">
-                        No devices yet — once one pings, it shows up here.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
-          </>
-        )}
+        <DataTable
+          columns={columns}
+          rows={pings}
+          rowKey={(p) => p.serialNumber}
+          loading={loading}
+          sort={table.sort}
+          onSort={table.toggleSort}
+          page={table.page}
+          pageSize={table.pageSize}
+          total={table.total}
+          onPageChange={table.setPage}
+          onPageSizeChange={table.setPageSize}
+          emptyMessage="No devices yet — once one pings, it shows up here."
+          searchValue={table.searchInput}
+          onSearchChange={table.setSearchInput}
+          searchPlaceholder="Search serial number or company…"
+          selection={isSuperAdmin ? { selected, toggle, toggleAll } : undefined}
+        />
       </div>
     </div>
   );

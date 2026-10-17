@@ -2,7 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db/client";
 import { requireSuperAdmin } from "../middleware/requireAdminAuth";
-import { paginationQuerySchema } from "../utils/pagination";
+import { Prisma } from "@prisma/client";
+import { buildOrderBy, buildSearch, dataTableQuerySchema, SortColumns } from "../utils/datatable";
 
 // Unconditional firehose of every /iclock/* request - super_admin only,
 // since it isn't scoped to a company/device (that's the point: it's the
@@ -10,10 +11,19 @@ import { paginationQuerySchema } from "../utils/pagination";
 export const rawRequestsRouter = Router();
 rawRequestsRouter.use(requireSuperAdmin);
 
-const listQuerySchema = paginationQuerySchema.extend({
+const listQuerySchema = dataTableQuerySchema.extend({
   serialNumber: z.string().optional(),
   endpoint: z.string().optional(),
 });
+
+// Sortable columns - each backed by an index (see schema.prisma). Method
+// and body size are deliberately not sortable: method has a handful of
+// distinct values, and body size is computed, not stored.
+const sortColumns = {
+  createdAt: (dir) => ({ createdAt: dir }),
+  serialNumber: (dir) => ({ serialNumber: dir }),
+  endpoint: (dir) => ({ endpoint: dir }),
+} satisfies SortColumns<Prisma.RawRequestLogOrderByWithRelationInput>;
 
 rawRequestsRouter.get("/", async (req, res) => {
   const parsedQuery = listQuerySchema.safeParse(req.query);
@@ -21,16 +31,17 @@ rawRequestsRouter.get("/", async (req, res) => {
     res.status(400).json({ error: "Invalid query", details: parsedQuery.error.flatten() });
     return;
   }
-  const { page, pageSize, serialNumber, endpoint } = parsedQuery.data;
-  const where = {
+  const { page, pageSize, sortBy, sortDir, search, serialNumber, endpoint } = parsedQuery.data;
+  const where: Prisma.RawRequestLogWhereInput = {
     ...(serialNumber ? { serialNumber } : {}),
     ...(endpoint ? { endpoint } : {}),
+    ...buildSearch<Prisma.RawRequestLogWhereInput>(search, [(t) => ({ serialNumber: t }), (t) => ({ endpoint: t })]),
   };
 
   const [requests, total] = await Promise.all([
     prisma.rawRequestLog.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: buildOrderBy<Prisma.RawRequestLogOrderByWithRelationInput>(sortBy, sortDir, sortColumns, [{ createdAt: "desc" }]),
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

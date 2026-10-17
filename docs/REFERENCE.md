@@ -398,6 +398,20 @@ this server, this is often the only way to find out - see "Telling the
 device its own timezone" above for the investigation that led to
 building it.
 
+### Tables: sorting, search and paging
+
+Every list in the admin panel (Companies, Admin Users, Devices, Unregistered
+Devices, Punch Records, Failed Webhooks, Raw Data Dump, Raw Request Log) is a
+server-side datatable. The browser sends `page`, `pageSize` (10/25/50/100),
+`sortBy`, `sortDir` (`asc`/`desc`) and `search` (case-insensitive substring
+match) to the list endpoint, and only that page of rows comes back - nothing is
+sorted or filtered in the browser. Click a column header to sort; a column with
+no arrow is deliberately unsortable (computed, free text, or too few distinct
+values to be worth an index). An unrecognised `sortBy` is ignored rather than
+rejected. Each sortable column is backed by a database index (migration
+`20261017120000_datatable_sort_indexes`); when adding a sortable column, add its
+index in the same change - see `src/utils/datatable.ts`.
+
 ### Deleting records
 
 Punch Records, Failed Webhooks, Raw Data Dump, and Raw Request Log all

@@ -451,3 +451,27 @@ code.mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12
   .settings-section, .settings-footer { padding-left: 16px; padding-right: 16px; }
   .settings-card .error-banner { margin-left: 16px; margin-right: 16px; }
 }
+
+/* ---------- Datatables ---------- */
+
+.datatable-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.datatable-search { max-width: 280px; flex: 1 1 200px; }
+.table-wrap.is-loading { opacity: 0.55; transition: opacity 0.1s; }
+.sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+.sort-btn:hover, .sort-btn.active { color: var(--text); }
+.sort-btn .sort-idle { opacity: 0.35; }
+.pagination-size { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; color: var(--text-muted); }
+.pagination-size select { width: auto; padding: 4px 6px; }
+.datatable-filter { width: auto; min-width: 140px; }

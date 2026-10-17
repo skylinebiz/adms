@@ -1,20 +1,32 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, AdminUserSummary, ApiError, CompanyOption } from "../api";
 import { useAuth } from "../context/AuthContext";
-import Pagination from "../components/Pagination";
+import DataTable, { Column } from "../components/DataTable";
+import { useDataTable } from "../hooks/useDataTable";
 import { KeyRound, Trash2 } from "lucide-react";
 import IconButton from "../components/IconButton";
 
-const PAGE_SIZE = 25;
-
 export default function AdminUsers() {
   const { user } = useAuth();
-  const [users, setUsers] = useState<AdminUserSummary[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [roleFilter, setRoleFilter] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("");
+  const [actionError, setError] = useState<string | null>(null);
+
+  const table = useDataTable<AdminUserSummary>({
+    fetcher: async (q) => {
+      const r = await api.listAdminUsers({
+        ...q,
+        role: roleFilter || undefined,
+        companyId: companyFilter || undefined,
+      });
+      return { rows: r.adminUsers, total: r.total };
+    },
+    defaultSort: { sortBy: "createdAt", sortDir: "desc" },
+    deps: [roleFilter, companyFilter],
+    errorMessage: "Failed to load admin users",
+  });
+  const error = actionError ?? table.error;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,28 +37,14 @@ export default function AdminUsers() {
   const [resetTarget, setResetTarget] = useState<string | null>(null);
   const [resetPassword, setResetPassword] = useState("");
 
-  async function load() {
-    setLoading(true);
-    try {
-      const [u, c] = await Promise.all([
-        api.listAdminUsers({ page, pageSize: PAGE_SIZE }),
-        api.listCompanyOptions(),
-      ]);
-      setUsers(u.adminUsers);
-      setTotal(u.total);
-      setCompanies(c.companies);
-      if (!companyId && c.companies[0]) setCompanyId(c.companies[0].id);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load admin users");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+    api.listCompanyOptions().then((c) => {
+      setCompanies(c.companies);
+      setCompanyId((current) => current || c.companies[0]?.id || "");
+    });
+  }, []);
+
+  const load = table.reload;
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();
@@ -61,7 +59,7 @@ export default function AdminUsers() {
       });
       setEmail("");
       setPassword("");
-      setPage(1);
+      table.setPage(1);
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to create admin user");
@@ -92,6 +90,37 @@ export default function AdminUsers() {
       setError(err instanceof ApiError ? err.message : "Failed to reset password");
     }
   }
+
+  const columns: Column<AdminUserSummary>[] = [
+    { key: "email", header: "Email", sortable: true, render: (u) => u.email },
+    {
+      key: "role",
+      header: "Role",
+      sortable: true,
+      render: (u) => (u.role === "SUPER_ADMIN" ? "Super admin" : "Company admin"),
+    },
+    {
+      key: "company",
+      header: "Company",
+      sortable: true,
+      render: (u) => companies.find((c) => c.id === u.companyId)?.name ?? "—",
+    },
+    {
+      key: "actions",
+      header: "",
+      cellClassName: "actions-cell",
+      render: (u) => (
+        <>
+          {user?.role === "SUPER_ADMIN" && (
+            <IconButton icon={KeyRound} label="Reset password" onClick={() => setResetTarget(u.id)} />
+          )}
+          {user?.role === "SUPER_ADMIN" && u.id !== user.id && (
+            <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => onDelete(u.id)} />
+          )}
+        </>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -147,49 +176,54 @@ export default function AdminUsers() {
       </div>
 
       <div className="card">
-        {loading ? (
-          <p className="muted">Loading…</p>
-        ) : (
-          <>
-            <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Company</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <tr key={u.id}>
-                    <td>{u.email}</td>
-                    <td>{u.role === "SUPER_ADMIN" ? "Super admin" : "Company admin"}</td>
-                    <td>{companies.find((c) => c.id === u.companyId)?.name ?? "—"}</td>
-                    <td className="actions-cell">
-                      {user?.role === "SUPER_ADMIN" && (
-                        <IconButton icon={KeyRound} label="Reset password" onClick={() => setResetTarget(u.id)} />
-                      )}
-                      {user?.role === "SUPER_ADMIN" && u.id !== user.id && (
-                        <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => onDelete(u.id)} />
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {users.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="muted">
-                      No admin users found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            </div>
-            <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
-          </>
-        )}
+        <DataTable
+          columns={columns}
+          rows={table.rows}
+          rowKey={(u) => u.id}
+          loading={table.loading}
+          sort={table.sort}
+          onSort={table.toggleSort}
+          page={table.page}
+          pageSize={table.pageSize}
+          total={table.total}
+          onPageChange={table.setPage}
+          onPageSizeChange={table.setPageSize}
+          emptyMessage="No admin users found."
+          searchValue={table.searchInput}
+          onSearchChange={table.setSearchInput}
+          searchPlaceholder="Search email or company…"
+          toolbar={
+            <>
+              {user?.role === "SUPER_ADMIN" && (
+                <select
+                  className="datatable-filter"
+                  aria-label="Filter by role"
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value)}
+                >
+                  <option value="">All roles</option>
+                  <option value="SUPER_ADMIN">Super admin</option>
+                  <option value="COMPANY_ADMIN">Company admin</option>
+                </select>
+              )}
+              {user?.role === "SUPER_ADMIN" && (
+                <select
+                  className="datatable-filter"
+                  aria-label="Filter by company"
+                  value={companyFilter}
+                  onChange={(e) => setCompanyFilter(e.target.value)}
+                >
+                  <option value="">All companies</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </>
+          }
+        />
       </div>
 
       {resetTarget && (

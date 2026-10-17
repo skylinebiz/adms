@@ -35,6 +35,9 @@ model Company {
   devices        Device[]
   pendingDevices PendingDevice[]
 
+  // Datatable sort columns (the Companies page sorts by name / created).
+  @@index([name])
+  @@index([createdAt])
   @@map("companies")
 }
 
@@ -50,6 +53,9 @@ model AdminUser {
   updatedAt    DateTime  @updatedAt
 
   @@index([companyId])
+  // Datatable sort columns on the Admin Users page.
+  @@index([role])
+  @@index([createdAt])
   @@map("admin_users")
 }
 
@@ -110,6 +116,11 @@ model Device {
   rawLogs        DeviceRawLog[]
 
   @@index([companyId])
+  // Datatable sort columns on the Devices page (serialNumber is already
+  // covered by its unique index).
+  @@index([label])
+  @@index([lastSeenAt])
+  @@index([createdAt])
   @@map("devices")
 }
 
@@ -157,6 +168,12 @@ model PunchRecord {
   @@unique([deviceId, devicePin, punchTime, status, verifyMode], name: "dedupe_key")
   @@index([webhookDelivered, nextAttemptAt])
   @@index([deviceId, punchTime])
+  // Datatable sort columns on the Punch Records pages (a device-scoped
+  // sort by punchTime uses the composite above).
+  @@index([punchTime])
+  @@index([punchTimeUtc])
+  @@index([devicePin])
+  @@index([webhookAttempts])
   @@map("punch_records")
 }
 
@@ -249,6 +266,9 @@ model PendingDevice {
   pingCount    Int      @default(0)
 
   @@index([companyId])
+  // Datatable sort columns on the Unregistered Devices page.
+  @@index([lastSeenAt])
+  @@index([pingCount])
   @@map("pending_devices")
 }
 
@@ -270,6 +290,9 @@ model DeviceRawLog {
   createdAt DateTime @default(now())
 
   @@index([deviceId, createdAt])
+  // Datatable sort columns on the Raw Data Dump page (always scoped to one device).
+  @@index([deviceId, table])
+  @@index([deviceId, endpoint])
   @@map("device_raw_logs")
 }
 
@@ -290,6 +313,8 @@ model RawRequestLog {
 
   @@index([createdAt])
   @@index([serialNumber])
+  // Datatable sort column on the Raw Request Log page.
+  @@index([endpoint])
   @@map("raw_request_logs")
 }
 
