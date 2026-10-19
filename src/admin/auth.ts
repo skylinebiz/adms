@@ -7,6 +7,7 @@ import { signAdminToken } from "./jwt";
 import { requireAdminAuth } from "../middleware/requireAdminAuth";
 import { slugSchema } from "../utils/slug";
 import { getOrCreatePlatformSettings } from "../utils/retention";
+import { clientIp, createRateLimiter, rateLimitByIp, sendRateLimited } from "../middleware/rateLimit";
 
 export const authRouter = Router();
 
@@ -43,6 +44,13 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+// Only FAILED logins count, so a legitimate user is never locked out by
+// normal use; a success clears that email's counter. Per-IP stops one source
+// spraying many accounts, per-email stops many sources hammering one account.
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const loginIpLimiter = createRateLimiter({ windowMs: LOGIN_WINDOW_MS, max: 30 });
+const loginEmailLimiter = createRateLimiter({ windowMs: LOGIN_WINDOW_MS, max: 10 });
+
 authRouter.post("/login", async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -51,17 +59,30 @@ authRouter.post("/login", async (req, res) => {
   }
 
   const { email, password } = parsed.data;
-  const user = await prisma.adminUser.findUnique({ where: { email } });
-  if (!user) {
-    res.status(401).json({ error: "Invalid email or password" });
+  const ip = clientIp(req);
+  const emailKey = email.toLowerCase();
+  const ipCheck = loginIpLimiter.check(ip);
+  const emailCheck = loginEmailLimiter.check(emailKey);
+  if (!ipCheck.allowed || !emailCheck.allowed) {
+    sendRateLimited(
+      res,
+      Math.max(ipCheck.retryAfterSec, emailCheck.retryAfterSec),
+      "Too many failed login attempts. Try again later."
+    );
     return;
   }
 
-  const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) {
+  const user = await prisma.adminUser.findUnique({ where: { email } });
+  // bcrypt.compare is skipped for unknown emails (as before); both branches
+  // still count as a failure here.
+  const valid = user ? await bcrypt.compare(password, user.passwordHash) : false;
+  if (!user || !valid) {
+    loginIpLimiter.hit(ip);
+    loginEmailLimiter.hit(emailKey);
     res.status(401).json({ error: "Invalid email or password" });
     return;
   }
+  loginEmailLimiter.reset(emailKey);
 
   const token = signAdminToken({
     sub: user.id,
@@ -91,7 +112,15 @@ authRouter.get("/signup-status", async (_req, res) => {
   res.json({ signupsEnabled });
 });
 
-authRouter.post("/signup", async (req, res) => {
+// Every attempt counts (not just successes), so a script probing slugs/emails
+// is throttled as hard as one creating accounts.
+const signupRateLimit = rateLimitByIp({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: "Too many signup attempts from this address. Try again later.",
+});
+
+authRouter.post("/signup", signupRateLimit, async (req, res) => {
   // Checked server-side, ahead of validation - hiding the form in the UI
   // is only a convenience, not the enforcement.
   const { signupsEnabled } = await getOrCreatePlatformSettings(prisma);

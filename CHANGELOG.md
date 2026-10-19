@@ -12,6 +12,20 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.19.0] - 2026-10-19
+
+### Added
+
+- **Rate limiting on public signup and login** to curb signup abuse and
+  password guessing. Signup: 5 attempts per hour per IP (every attempt
+  counts). Login: only *failed* attempts count - 30 per 15 minutes per IP
+  and 10 per 15 minutes per email; a successful login clears that email's
+  counter. Over the limit returns `429` with a `Retry-After` header.
+- New `TRUST_PROXY_HOPS` env var (default `0`). Set it to the number of
+  reverse proxies in front of the app so limits key on the real client IP
+  instead of the proxy's.
+- Limits are held in memory per server instance and reset on restart.
+
 ## [2.18.0] - 2026-10-17
 
 ### Added

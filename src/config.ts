@@ -36,6 +36,11 @@ export const config = {
   // moved to PlatformSettings (see prisma/schema.prisma), changeable from
   // the admin panel's Settings page without a restart. Read via
   // getOrCreatePlatformSettings in src/utils/retention.ts.
+  // Number of reverse-proxy hops in front of the app (0 = none, the client
+  // connects directly). Needed so req.ip - and therefore the signup/login
+  // rate limits - see the real client address instead of the proxy's.
+  // Setting this too high lets a client spoof its IP via X-Forwarded-For.
+  trustProxyHops: Number(process.env.TRUST_PROXY_HOPS ?? 0),
   workerPollIntervalMs: Number(process.env.WORKER_POLL_INTERVAL_MS ?? 3000),
   workerBatchSize: Number(process.env.WORKER_BATCH_SIZE ?? 50),
 };

@@ -8,6 +8,7 @@ import { admsRouter, clearReservedCompanySlug } from "./adms/router";
 import { adminApiRouter } from "./admin/router";
 import { errorHandler } from "./middleware/errorHandler";
 import { prisma } from "./db/client";
+import { config } from "./config";
 
 // Builds the Express app without binding a port - split out of server.ts so
 // tests (supertest et al.) can exercise the real middleware stack (CORS,
@@ -16,6 +17,7 @@ import { prisma } from "./db/client";
 export function buildApp(): express.Express {
   const app = express();
   app.disable("x-powered-by");
+  if (config.trustProxyHops > 0) app.set("trust proxy", config.trustProxyHops);
 
   // Console log of every incoming HTTP request, registered before anything
   // else so it also catches requests that match no route at all - the case
