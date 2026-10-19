@@ -12,6 +12,14 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.19.1] - 2026-10-19
+
+### Fixed
+
+- `docker-compose.yml` now passes `TRUST_PROXY_HOPS` through to the server
+  container. In 2.19.0 it was only read from the host environment, so
+  setting it in `.env` had no effect inside Docker.
+
 ## [2.19.0] - 2026-10-19
 
 ### Added

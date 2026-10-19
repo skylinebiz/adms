@@ -49,6 +49,9 @@ services:
       ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD}
       ADMS_MAX_BODY_SIZE: ${ADMS_MAX_BODY_SIZE:-10mb}
       DEVICE_OFFLINE_THRESHOLD_MS: ${DEVICE_OFFLINE_THRESHOLD_MS:-300000}
+      # Reverse-proxy hops in front of the app (Cloudflare + NPM = 2); see
+      # TRUST_PROXY_HOPS in .env.example.
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-0}
     ports:
       - "8080:8080"
     healthcheck:
