@@ -97,7 +97,7 @@ export async function logUnregisteredPing(req: Request, serialNumber: string, ra
         endpoint: req.path,
         method: req.method,
         query: JSON.stringify(req.query),
-        rawBody: rawBody ? rawBody.slice(0, 10000) : null,
+        rawBody: rawBody || null,
       },
     });
   } catch (err) {

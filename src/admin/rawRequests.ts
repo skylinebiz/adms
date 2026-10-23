@@ -44,11 +44,37 @@ rawRequestsRouter.get("/", async (req, res) => {
       orderBy: buildOrderBy<Prisma.RawRequestLogOrderByWithRelationInput>(sortBy, sortDir, sortColumns, [{ createdAt: "desc" }]),
       skip: (page - 1) * pageSize,
       take: pageSize,
+      // The body can be up to ADMS_MAX_BODY_SIZE - never ship it in the list.
+      // It's fetched on demand via GET /:id when a row's details are opened.
+      select: { id: true, serialNumber: true, endpoint: true, method: true, query: true, headers: true, createdAt: true },
     }),
     prisma.rawRequestLog.count({ where }),
   ]);
 
-  res.json({ requests, total, page, pageSize });
+  // Body size is computed in the database so the list never loads the bodies.
+  const sizes = requests.length
+    ? await prisma.$queryRaw<{ id: string; size: number }[]>`
+        SELECT id, COALESCE(char_length("rawBody"), 0)::int AS size
+        FROM raw_request_logs
+        WHERE id IN (${Prisma.join(requests.map((r) => r.id))})`
+    : [];
+  const sizeById = new Map(sizes.map((s) => [s.id, s.size]));
+
+  res.json({
+    requests: requests.map((r) => ({ ...r, bodySize: sizeById.get(r.id) ?? 0 })),
+    total,
+    page,
+    pageSize,
+  });
+});
+
+rawRequestsRouter.get("/:id", async (req, res) => {
+  const request = await prisma.rawRequestLog.findUnique({ where: { id: req.params.id } });
+  if (!request) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  res.json({ request });
 });
 
 const bulkDeleteSchema = z.object({ ids: z.array(z.string()).min(1).max(500) });

@@ -12,6 +12,19 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.20.0] - 2026-10-23
+
+### Changed
+
+- Raw logs (`RawRequestLog`, `DeviceRawLog`, unregistered-device pings) no
+  longer truncate `rawBody` to 10,000 characters. Anything accepted under
+  `ADMS_MAX_BODY_SIZE` is now stored in full; the retention sweep already
+  bounds how long large bodies live. Rows logged before this version stay
+  truncated.
+- Raw Request Log list no longer returns request bodies - it returns a
+  computed `bodySize` instead, and the body is fetched via the new
+  `GET /api/raw-requests/:id` only when a row's details are opened.
+
 ## [2.19.1] - 2026-10-19
 
 ### Fixed

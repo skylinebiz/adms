@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api, ApiError, RawRequestLog } from "../api";
+import { api, ApiError, RawRequestLog, RawRequestLogDetail } from "../api";
 import { useSelection } from "../hooks/useSelection";
 import { useDataTable } from "../hooks/useDataTable";
 import DataTable, { Column } from "../components/DataTable";
@@ -12,7 +12,7 @@ import IconButton from "../components/IconButton";
 export default function RawRequestLogPage() {
   const [params, setParams] = useSearchParams();
   const [actionError, setError] = useState<string | null>(null);
-  const [viewing, setViewing] = useState<RawRequestLog | null>(null);
+  const [viewing, setViewing] = useState<RawRequestLogDetail | null>(null);
   const { selected, toggle, toggleAll, clear } = useSelection();
 
   const endpoint = params.get("endpoint") ?? "";
@@ -39,6 +39,14 @@ export default function RawRequestLogPage() {
     if (value) next.set(key, value);
     else next.delete(key);
     setParams(next);
+  }
+
+  async function viewOne(id: string) {
+    try {
+      setViewing((await api.getRawRequest(id)).request);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to load request");
+    }
   }
 
   async function deleteOne(id: string) {
@@ -79,14 +87,14 @@ export default function RawRequestLogPage() {
       sortable: true,
       render: (r) => <code className="mono">{r.endpoint}</code>,
     },
-    { key: "bodySize", header: "Body size", render: (r) => `${r.rawBody?.length ?? 0} chars` },
+    { key: "bodySize", header: "Body size", render: (r) => `${r.bodySize} chars` },
     {
       key: "actions",
       header: "",
       cellClassName: "actions-cell",
       render: (r) => (
         <>
-          <IconButton icon={Eye} label="View" onClick={() => setViewing(r)} />
+          <IconButton icon={Eye} label="View" onClick={() => viewOne(r.id)} />
           <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => deleteOne(r.id)} />
         </>
       ),

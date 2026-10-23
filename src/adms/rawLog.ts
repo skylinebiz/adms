@@ -2,13 +2,6 @@ import { NextFunction, Request, Response } from "express";
 import { prisma } from "../db/client";
 import { deviceLogger } from "../logger";
 
-const MAX_STORED_BODY = 10000;
-
-function truncate(value: string | undefined | null): string | null {
-  if (!value) return null;
-  return value.length > MAX_STORED_BODY ? value.slice(0, MAX_STORED_BODY) : value;
-}
-
 // Unconditional firehose: logs *every* /iclock/* request (any SN, any
 // table, registered or not) to RawRequestLog for super-admin debugging.
 // Never throws and never blocks the device response on failure - a logging
@@ -23,7 +16,7 @@ export async function logRawRequest(req: Request, _res: Response, next: NextFunc
         method: req.method,
         query: JSON.stringify(req.query),
         headers: JSON.stringify(req.headers),
-        rawBody: truncate(typeof req.body === "string" ? req.body : undefined),
+        rawBody: typeof req.body === "string" && req.body ? req.body : null,
       },
     });
   } catch (err) {
@@ -56,7 +49,7 @@ export async function logDeviceRawData(
       table: table || null,
       query: JSON.stringify(req.query),
       headers: JSON.stringify(req.headers),
-      rawBody: truncate(rawBody),
+      rawBody: rawBody || null,
     },
   });
 }

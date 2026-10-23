@@ -144,9 +144,12 @@ export interface RawRequestLog {
   method: string;
   query: string | null;
   headers: string | null;
-  rawBody: string | null;
   createdAt: string;
+  bodySize: number;
 }
+
+// Single-entry fetch includes the (potentially large) body, which the list omits.
+export type RawRequestLogDetail = Omit<RawRequestLog, "bodySize"> & { rawBody: string | null };
 
 export interface PlatformSettings {
   id: string;
@@ -308,6 +311,8 @@ export const api = {
 
   listRawRequests: (params: { serialNumber?: string; endpoint?: string } & TableParams = {}) =>
     get<{ requests: RawRequestLog[] } & Paginated<RawRequestLog>>(`/raw-requests${buildQuery({ ...params })}`),
+
+  getRawRequest: (id: string) => get<{ request: RawRequestLogDetail }>(`/raw-requests/${id}`),
 
   listPunchRecords: (params: Record<string, string | undefined>) => {
     const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v) as [string, string][]).toString();
