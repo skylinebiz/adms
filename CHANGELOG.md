@@ -12,6 +12,15 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.20.1] - 2026-10-23
+
+### Changed
+
+- Raw Data Dump (per-device raw logs) no longer returns request bodies in
+  the list: it returns a computed `bodySize`, and the body is fetched via
+  the new `GET /api/devices/:id/raw-logs/:logId` only when a row's details
+  are opened, same as the Raw Request Log in 2.20.0.
+
 ## [2.20.0] - 2026-10-23
 
 ### Changed

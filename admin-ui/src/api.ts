@@ -133,9 +133,12 @@ export interface DeviceRawLog {
   table: string | null;
   query: string | null;
   headers: string | null;
-  rawBody: string | null;
   createdAt: string;
+  bodySize: number;
 }
+
+// Single-entry fetch includes the (potentially large) body, which the list omits.
+export type DeviceRawLogDetail = Omit<DeviceRawLog, "bodySize"> & { rawBody: string | null };
 
 export interface RawRequestLog {
   id: string;
@@ -304,6 +307,8 @@ export const api = {
     get<{ logs: DeviceRawLog[] } & Paginated<DeviceRawLog>>(
       `/devices/${deviceId}/raw-logs${buildQuery({ ...params })}`
     ),
+  getDeviceRawLog: (deviceId: string, logId: string) =>
+    get<{ log: DeviceRawLogDetail }>(`/devices/${deviceId}/raw-logs/${logId}`),
   sendDeviceCommand: (deviceId: string, command: string) =>
     post<{ command: DeviceCommandLog }>(`/devices/${deviceId}/commands`, { command }),
   listDeviceCommands: (deviceId: string) => get<{ commands: DeviceCommandLog[] }>(`/devices/${deviceId}/commands`),

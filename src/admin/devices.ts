@@ -649,11 +649,41 @@ devicesRouter.get("/:id/raw-logs", async (req, res) => {
       orderBy: buildOrderBy<Prisma.DeviceRawLogOrderByWithRelationInput>(sortBy, sortDir, rawLogSortColumns, [{ createdAt: "desc" }]),
       skip: (page - 1) * pageSize,
       take: pageSize,
+      // Bodies can be up to ADMS_MAX_BODY_SIZE - fetched on demand via
+      // GET /:id/raw-logs/:logId when a row's details are opened.
+      select: { id: true, deviceId: true, endpoint: true, method: true, table: true, query: true, headers: true, createdAt: true },
     }),
     prisma.deviceRawLog.count({ where }),
   ]);
 
-  res.json({ logs, total, page, pageSize });
+  // Body size is computed in the database so the list never loads the bodies.
+  const sizes = logs.length
+    ? await prisma.$queryRaw<{ id: string; size: number }[]>`
+        SELECT id, COALESCE(char_length("rawBody"), 0)::int AS size
+        FROM device_raw_logs
+        WHERE id IN (${Prisma.join(logs.map((l) => l.id))})`
+    : [];
+  const sizeById = new Map(sizes.map((s) => [s.id, s.size]));
+
+  res.json({ logs: logs.map((l) => ({ ...l, bodySize: sizeById.get(l.id) ?? 0 })), total, page, pageSize });
+});
+
+devicesRouter.get("/:id/raw-logs/:logId", async (req, res) => {
+  const device = await prisma.device.findUnique({ where: { id: req.params.id } });
+  if (!device) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (req.adminUser!.role !== "SUPER_ADMIN" && req.adminUser!.companyId !== device.companyId) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  const log = await prisma.deviceRawLog.findUnique({ where: { id: req.params.logId } });
+  if (!log || log.deviceId !== device.id) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  res.json({ log });
 });
 
 // Deletion is restricted to super_admin, same reasoning as punch records -

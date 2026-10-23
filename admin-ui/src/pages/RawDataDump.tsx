@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api, ApiError, DeviceOption, DeviceRawLog } from "../api";
+import { api, ApiError, DeviceOption, DeviceRawLog, DeviceRawLogDetail } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useSelection } from "../hooks/useSelection";
 import { useDataTable } from "../hooks/useDataTable";
@@ -17,7 +17,7 @@ export default function RawDataDump() {
   const [params, setParams] = useSearchParams();
   const [devices, setDevices] = useState<DeviceOption[]>([]);
   const [actionError, setError] = useState<string | null>(null);
-  const [viewing, setViewing] = useState<DeviceRawLog | null>(null);
+  const [viewing, setViewing] = useState<DeviceRawLogDetail | null>(null);
   const { selected, toggle, toggleAll, clear } = useSelection();
 
   const deviceId = params.get("deviceId") ?? "";
@@ -50,6 +50,14 @@ export default function RawDataDump() {
     if (value) next.set(key, value);
     else next.delete(key);
     setParams(next);
+  }
+
+  async function viewOne(logId: string) {
+    try {
+      setViewing((await api.getDeviceRawLog(deviceId, logId)).log);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to load entry");
+    }
   }
 
   async function deleteOne(id: string) {
@@ -90,14 +98,14 @@ export default function RawDataDump() {
       render: (l) => <code className="mono">{l.endpoint}</code>,
     },
     { key: "method", header: "Method", render: (l) => l.method },
-    { key: "bodySize", header: "Body size", render: (l) => `${l.rawBody?.length ?? 0} chars` },
+    { key: "bodySize", header: "Body size", render: (l) => `${l.bodySize} chars` },
     {
       key: "actions",
       header: "",
       cellClassName: "actions-cell",
       render: (l) => (
         <>
-          <IconButton icon={Eye} label="View" onClick={() => setViewing(l)} />
+          <IconButton icon={Eye} label="View" onClick={() => viewOne(l.id)} />
           {canDelete && <IconButton icon={Trash2} label="Delete" variant="danger" onClick={() => deleteOne(l.id)} />}
         </>
       ),
