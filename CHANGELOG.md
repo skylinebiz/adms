@@ -12,6 +12,15 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.20.2] - 2026-10-23
+
+### Changed
+
+- README: added a legal notice and disclaimer (independent project, ADMS is
+  ZKTeco-controlled and not an open standard, legality and biometric-data
+  compliance are the user's responsibility, no warranty). Clarified that a
+  failed webhook is attempted 5 times in total.
+
 ## [2.20.1] - 2026-10-23
 
 ### Changed
