@@ -40,7 +40,7 @@ function toPublicUser(user: {
 }
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   password: z.string().min(1),
 });
 
@@ -101,7 +101,7 @@ authRouter.post("/login", async (req, res) => {
 const signupSchema = z.object({
   companyName: z.string().min(1),
   slug: slugSchema,
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
 

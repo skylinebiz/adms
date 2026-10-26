@@ -19,7 +19,7 @@ export async function seedBootstrapAdmin() {
   const passwordHash = await bcrypt.hash(config.adminBootstrapPassword, 12);
   await prisma.adminUser.create({
     data: {
-      email: config.adminBootstrapEmail,
+      email: config.adminBootstrapEmail.trim().toLowerCase(),
       passwordHash,
       role: "SUPER_ADMIN",
       companyId: null,

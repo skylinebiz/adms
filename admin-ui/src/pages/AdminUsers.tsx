@@ -30,12 +30,14 @@ export default function AdminUsers() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState<"SUPER_ADMIN" | "COMPANY_ADMIN">("COMPANY_ADMIN");
   const [companyId, setCompanyId] = useState("");
   const [creating, setCreating] = useState(false);
 
   const [resetTarget, setResetTarget] = useState<string | null>(null);
   const [resetPassword, setResetPassword] = useState("");
+  const [resetConfirm, setResetConfirm] = useState("");
 
   useEffect(() => {
     api.listCompanyOptions().then((c) => {
@@ -48,8 +50,12 @@ export default function AdminUsers() {
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();
-    setCreating(true);
     setError(null);
+    if (password !== confirmPassword) {
+      setError("Password and confirmation do not match");
+      return;
+    }
+    setCreating(true);
     try {
       await api.createAdminUser({
         email,
@@ -59,6 +65,7 @@ export default function AdminUsers() {
       });
       setEmail("");
       setPassword("");
+      setConfirmPassword("");
       table.setPage(1);
       await load();
     } catch (err) {
@@ -81,10 +88,15 @@ export default function AdminUsers() {
   async function onResetPassword(e: FormEvent) {
     e.preventDefault();
     if (!resetTarget) return;
+    if (resetPassword !== resetConfirm) {
+      setError("Password and confirmation do not match");
+      return;
+    }
     try {
       await api.resetAdminUserPassword(resetTarget, resetPassword);
       setResetTarget(null);
       setResetPassword("");
+      setResetConfirm("");
       alert("Password reset. The user will be prompted to change it on next login.");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to reset password");
@@ -142,6 +154,18 @@ export default function AdminUsers() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 minLength={8}
+                autoComplete="new-password"
+                required
+              />
+            </div>
+            <div className="field">
+              <label>Confirm password</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                minLength={8}
+                autoComplete="new-password"
                 required
               />
             </div>
@@ -240,6 +264,16 @@ export default function AdminUsers() {
                   minLength={8}
                   required
                   autoFocus
+                />
+              </div>
+              <div className="field">
+                <label>Confirm password</label>
+                <input
+                  type="password"
+                  value={resetConfirm}
+                  onChange={(e) => setResetConfirm(e.target.value)}
+                  minLength={8}
+                  required
                 />
               </div>
               <div style={{ display: "flex", gap: 8 }}>

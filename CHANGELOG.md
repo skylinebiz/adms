@@ -12,6 +12,20 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.21.0] - 2026-10-26
+
+### Added
+
+- Confirm-password field on signup, new admin user, and admin password reset
+  forms; a mismatch blocks submission.
+
+### Fixed
+
+- Admin emails are now trimmed and lowercased on signup, login, admin-user
+  create/update, and the bootstrap seed, so a differently-capitalized email
+  no longer fails login. Migration `lowercase_admin_emails` normalizes
+  existing rows (skipping any that would collide with another account).
+
 ## [2.20.2] - 2026-10-23
 
 ### Changed

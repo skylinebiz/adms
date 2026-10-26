@@ -12,6 +12,7 @@ export default function Signup() {
   const [slugTouched, setSlugTouched] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   // null while loading. A failed status check falls back to showing the
@@ -35,6 +36,10 @@ export default function Signup() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (password !== confirmPassword) {
+      setError("Password and confirmation do not match");
+      return;
+    }
     setSubmitting(true);
     try {
       await api.signup({ companyName, slug, email, password });
@@ -114,8 +119,25 @@ export default function Signup() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             minLength={8}
+            autoComplete="new-password"
             required
           />
+        </div>
+        <div className="field">
+          <label>Confirm password</label>
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            minLength={8}
+            autoComplete="new-password"
+            required
+          />
+          {confirmPassword && password !== confirmPassword && (
+            <div className="muted" style={{ marginTop: 4 }}>
+              Passwords do not match
+            </div>
+          )}
         </div>
         <button className="btn btn-primary" type="submit" disabled={submitting} style={{ width: "100%" }}>
           {submitting ? "Creating…" : "Create company"}

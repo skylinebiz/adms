@@ -68,7 +68,7 @@ adminUsersRouter.get("/", async (req, res) => {
 });
 
 const createSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   password: z.string().min(8),
   role: z.enum(["SUPER_ADMIN", "COMPANY_ADMIN"]),
   companyId: z.string().nullable().optional(),
@@ -122,7 +122,7 @@ adminUsersRouter.post("/", async (req, res) => {
 });
 
 const updateSchema = z.object({
-  email: z.string().email().optional(),
+  email: z.string().trim().toLowerCase().email().optional(),
   role: z.enum(["SUPER_ADMIN", "COMPANY_ADMIN"]).optional(),
   companyId: z.string().nullable().optional(),
 });
