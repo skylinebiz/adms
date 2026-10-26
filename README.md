@@ -1,5 +1,13 @@
 # Multitenant ADMS Server
 
+# ▶️ [WATCH THE SETUP VIDEO FIRST](https://www.youtube.com/watch?v=XgwOILGEwFI)
+
+## Not sure how to set up your device? This video shows every step.
+
+[![Watch the setup demo video](https://img.youtube.com/vi/XgwOILGEwFI/hqdefault.jpg)](https://www.youtube.com/watch?v=XgwOILGEwFI)
+
+---
+
 Connect your **ZKTeco** or **eSSL** biometric attendance devices to the cloud
 and get every punch delivered straight to your own system (ERPNext / Frappe HR,
 or any webhook URL).

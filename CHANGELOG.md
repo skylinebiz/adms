@@ -12,6 +12,14 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.22.1] - 2026-10-26
+
+### Changed
+
+- README: the setup demo video is now the first thing on the page, as a large
+  heading plus a clickable thumbnail, since new sign-ups were struggling to
+  set up their devices.
+
 ## [2.22.0] - 2026-10-26
 
 ### Added
