@@ -12,6 +12,16 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.21.1] - 2026-10-26
+
+### Fixed
+
+- Migration `lowercase_admin_emails` targeted `"AdminUser"` instead of the
+  real table name `"admin_users"` and failed to apply. If it already failed
+  on a database, recover with
+  `prisma migrate resolve --rolled-back 20261026120000_lowercase_admin_emails`
+  before redeploying.
+
 ## [2.21.0] - 2026-10-26
 
 ### Added
