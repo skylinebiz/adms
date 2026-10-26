@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { CirclePlus } from "lucide-react";
 import { CompanyOption } from "../api";
+import { SETUP_VIDEO_URL } from "../utils/links";
 
 // The single "how to add a device" explainer, shown at the top of
 // Unregistered Devices (the Devices page's "+ Add device" button links
@@ -37,6 +38,13 @@ export default function AddDeviceGuide({
   return (
     <div className="card guide">
       <h3>Add a device</h3>
+      <p className="hint">
+        New to this? Watch the{" "}
+        <a href={SETUP_VIDEO_URL} target="_blank" rel="noopener noreferrer">
+          setup demo video
+        </a>
+        .
+      </p>
 
       <ol className="steps">
         <li>

@@ -18,6 +18,9 @@ setting — ZKTeco X100-C, SpeedFace, EFace, eSSL models, and similar.
 
 ## How to configure
 
+**Prefer to watch?** A [setup demo video](https://www.youtube.com/watch?v=XgwOILGEwFI)
+walks through the whole process below.
+
 1. **Sign up** at [adms.adrk.in/admin/signup](https://adms.adrk.in/admin/signup).
    Pick a company name and a short URL slug (e.g. `acme-corp`).
 2. **Point your device** at the server. On the device go to

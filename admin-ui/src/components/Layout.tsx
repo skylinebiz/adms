@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, Navigate, useNavigate, useLocation } from "react-router-dom";
+import { SETUP_VIDEO_URL } from "../utils/links";
 import { useAuth } from "../context/AuthContext";
 import { getVersion } from "../api";
 
@@ -68,6 +69,9 @@ export default function Layout() {
             <NavLink to="/admin-users">Admin Users</NavLink>
             {user.role === "SUPER_ADMIN" && <NavLink to="/settings">Settings</NavLink>}
             <NavLink to="/change-password">Change Password</NavLink>
+            <a href={SETUP_VIDEO_URL} target="_blank" rel="noopener noreferrer">
+              Setup Demo Video
+            </a>
           </nav>
           <div className="user-info">
             <div>{user.email}</div>

@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import { SETUP_VIDEO_URL } from "../utils/links";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api, ApiError } from "../api";
@@ -52,6 +53,11 @@ export default function Login() {
         <button className="btn btn-primary" type="submit" disabled={submitting} style={{ width: "100%" }}>
           {submitting ? "Signing in…" : "Sign in"}
         </button>
+        <p className="muted" style={{ marginTop: 12, textAlign: "center" }}>
+          <a href={SETUP_VIDEO_URL} target="_blank" rel="noopener noreferrer">
+            Watch the setup demo video
+          </a>
+        </p>
         {signupsEnabled && (
           <p className="muted" style={{ marginTop: 12, textAlign: "center" }}>
             New here? <Link to="/signup">Create a company</Link>

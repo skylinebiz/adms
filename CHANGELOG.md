@@ -12,6 +12,15 @@ backward-compatible features, PATCH for backward-compatible fixes.
 > **2.3.0** onward, every change that lands gets its own version bump and
 > its own entry here, in the same commit as the change itself.
 
+## [2.22.0] - 2026-10-26
+
+### Added
+
+- Setup demo video (https://www.youtube.com/watch?v=XgwOILGEwFI) linked from
+  the README, the admin sidebar ("Setup Demo Video"), the **Add a device**
+  guide, and the login screen. The URL lives in one place,
+  `admin-ui/src/utils/links.ts`.
+
 ## [2.21.2] - 2026-10-26
 
 ### Added
